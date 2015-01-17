@@ -49,9 +49,13 @@ pub struct Grammar<T, N> {
 #[derive(Show)]
 pub struct LR0StateMachine<T, N> {
     pub states: Vec<(ItemSet<T, N>, BTreeMap<Symbol<T, N>, usize>)>,
+    pub start: N,
 }
 
 impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
+    // Creates the LR(0) state machine for a grammar.
+    // Takes an additional start symbol, which should be different from any nonterminal
+    // used in the grammar.
     pub fn lr0_state_machine(&self, fake_start: N) -> LR0StateMachine<T, N> {
         struct S<T, N> {
             states: Vec<(ItemSet<T, N>, BTreeMap<Symbol<T, N>, usize>)>,
@@ -97,7 +101,7 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
             }
         }
         fn advance<T: Clone, N: Clone>(i: &Item<T, N>) -> Option<(&Symbol<T, N>, Item<T, N>)> {
-            i.rhs.get(i.pos).map(|&: s| {
+            i.rhs.get(i.pos).map(|s| {
                 (s, Item {
                     lhs: i.lhs.clone(),
                     rhs: i.rhs.clone(),
@@ -129,7 +133,10 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
             }
             finished += 1;
         }
-        LR0StateMachine { states: state.states }
+        LR0StateMachine {
+            states: state.states,
+            start: fake_start,
+        }
     }
 
     // returns a map containing:
@@ -237,7 +244,7 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
 }
 
 impl<T: Ord + Clone, N: Ord + Clone> LR0StateMachine<T, N> {
-    pub fn augmented_grammar(&self, fake_start: N) -> Grammar<T, (usize, N)> {
+    pub fn augmented_grammar(&self) -> Grammar<T, (usize, N)> {
         let mut r = BTreeMap::new();
         for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
             for item in iset.items.iter() {
@@ -257,7 +264,7 @@ impl<T: Ord + Clone, N: Ord + Clone> LR0StateMachine<T, N> {
         }
         Grammar {
             rules: r,
-            start: (0, fake_start),
+            start: (0, self.start.clone()),
         }
     }
 }

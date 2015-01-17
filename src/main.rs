@@ -34,7 +34,7 @@ fn main() {
     println!("{:?}", g);
     let machine = g.lr0_state_machine("S");
     machine.print();
-    let ag = machine.augmented_grammar("S");
+    let ag = machine.augmented_grammar();
     println!("{:?}", ag);
     println!("");
     println!("{:?}", g.follow_sets(g.first_sets()));
