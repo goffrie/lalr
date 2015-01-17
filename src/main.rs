@@ -50,4 +50,6 @@ fn main() {
     println!("{:?}", g.follow_sets(g.first_sets()));
     println!("");
     println!("{:?}", ag.follow_sets(ag.first_sets()));
+    println!("");
+    println!("{:?}", g.lalr1());
 }
