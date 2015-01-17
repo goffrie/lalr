@@ -22,48 +22,81 @@ impl<T: Show, N: Show> Show for Symbol<T, N> {
     }
 }
 
-#[derive(Ord,PartialOrd,Eq,PartialEq,Show,Clone)]
-pub struct Item<T, N> {
-    pub lhs: N,
-    pub rhs: Vec<Symbol<T, N>>,
+#[derive(Show,Clone)]
+pub struct Rhs<T, N, A> {
+    pub syms: Vec<Symbol<T, N>>,
+    pub act: A,
+}
+
+impl<T: PartialEq, N: PartialEq, A> PartialEq for Rhs<T, N, A> {
+    fn eq(&self, other: &Self) -> bool {
+        self.syms == other.syms
+    }
+}
+
+impl<T: Eq, N: Eq, A> Eq for Rhs<T, N, A> { }
+
+impl<T: PartialOrd, N: PartialOrd, A> PartialOrd for Rhs<T, N, A> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.syms.partial_cmp(&other.syms)
+    }
+}
+
+impl<T: Ord, N: Ord, A> Ord for Rhs<T, N, A> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.syms.cmp(&other.syms)
+    }
+}
+
+#[derive(Ord,PartialOrd,Eq,PartialEq,Show)]
+pub struct Item<'a, T: 'a, N: 'a, A: 'a> {
+    pub lhs: &'a N,
+    pub rhs: &'a Rhs<T, N, A>,
     pub pos: usize,
 }
 
-#[derive(Ord,PartialOrd,Eq,PartialEq,Show,Clone)]
-pub struct ItemSet<T, N> {
-    pub items: BTreeSet<Item<T, N>>,
+impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
+    fn clone(&self) -> Item<'a, T, N, A> {
+        Item { lhs: self.lhs, rhs: self.rhs, pos: self.pos }
+    }
 }
 
-#[derive(Ord,PartialOrd,Eq,PartialEq,Show,Clone)]
-pub struct Rule<T, N> {
-    pub lhs: N,
-    pub rhs: Vec<Symbol<T, N>>,
+#[derive(Ord,PartialOrd,Eq,PartialEq,Show)]
+pub struct ItemSet<'a, T: 'a, N: 'a, A: 'a> {
+    pub items: BTreeSet<Item<'a, T, N, A>>,
+}
+
+impl<'a, T, N, A> Clone for ItemSet<'a, T, N, A> {
+    fn clone(&self) -> ItemSet<'a, T, N, A> {
+        ItemSet { items: self.items.clone() }
+    }
 }
 
 #[derive(Show)]
-pub struct Grammar<T, N> {
-    pub rules: BTreeMap<N, Vec<Vec<Symbol<T, N>>>>,
+pub struct Grammar<T, N, A> {
+    pub rules: BTreeMap<N, Vec<Rhs<T, N, A>>>,
+    // `start` must have exactly one rule of the form "`start` -> N", for some nonterminal N,
+    // and not be referred to elsewhere in the grammar.
     pub start: N,
 }
 
 #[derive(Show)]
-pub struct LR0StateMachine<T, N> {
-    pub states: Vec<(ItemSet<T, N>, BTreeMap<Symbol<T, N>, usize>)>,
-    pub start: N,
+pub struct LR0StateMachine<'a, T: 'a, N: 'a, A: 'a> {
+    pub states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
+    pub start: &'a N,
 }
 
-impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
+// FIXME: A doesn't actually have to be Ord
+impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> where T: Show, N: Show {
     // Creates the LR(0) state machine for a grammar.
-    // Takes an additional start symbol, which should be different from any nonterminal
-    // used in the grammar.
-    pub fn lr0_state_machine(&self, fake_start: N) -> LR0StateMachine<T, N> {
-        struct S<T, N> {
-            states: Vec<(ItemSet<T, N>, BTreeMap<Symbol<T, N>, usize>)>,
-            item_sets: BTreeMap<ItemSet<T, N>, usize>,
-            nubs: BTreeMap<ItemSet<T, N>, usize>,
+    pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {
+        struct S<'a, T: 'a, N: 'a, A: 'a> {
+            states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
+            item_sets: BTreeMap<ItemSet<'a, T, N, A>, usize>,
+            nubs: BTreeMap<ItemSet<'a, T, N, A>, usize>,
         }
-        impl<T: Ord + Clone, N: Ord + Clone> S<T, N> {
-            fn item_set(&mut self, item_set: ItemSet<T, N>) -> usize {
+        impl<'a, T: Ord, N: Ord, A: Ord> S<'a, T, N, A> {
+            fn item_set(&mut self, item_set: ItemSet<'a, T, N, A>) -> usize {
                 if let Some(&ix) = self.item_sets.get(&item_set) {
                     return ix;
                 }
@@ -72,19 +105,19 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
                 self.states.push((item_set, BTreeMap::new()));
                 ix
             }
-            fn complete_nub(&mut self, grammar: &Grammar<T, N>, nub: ItemSet<T, N>) -> usize {
+            fn complete_nub(&mut self, grammar: &'a Grammar<T, N, A>, nub: ItemSet<'a, T, N, A>) -> usize {
                 if let Some(&ix) = self.nubs.get(&nub) {
                     return ix;
                 }
-                let mut completed = nub.items.clone();
+                let mut completed: BTreeSet<_> = nub.items.clone();
                 let mut to_add: RingBuf<_> = nub.items.iter().cloned().collect();
                 while let Some(item) = to_add.pop_front() {
-                    if let Some(&Nonterminal(ref n)) = item.rhs.get(item.pos) {
+                    if let Some(&Nonterminal(ref n)) = item.rhs.syms.get(item.pos) {
                         if let Some(rules) = grammar.rules.get(n) {
                             for rhs in rules.iter() {
                                 let new_item = Item {
-                                    lhs: n.clone(),
-                                    rhs: rhs.clone(),
+                                    lhs: n,
+                                    rhs: rhs,
                                     pos: 0,
                                 };
                                 if !completed.contains(&new_item) {
@@ -100,31 +133,31 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
                 ix
             }
         }
-        fn advance<T: Clone, N: Clone>(i: &Item<T, N>) -> Option<(&Symbol<T, N>, Item<T, N>)> {
-            i.rhs.get(i.pos).map(|s| {
+        fn advance<'a, 'b, T, N, A>(i: &'b Item<'a, T, N, A>) -> Option<(&'a Symbol<T, N>, Item<'a, T, N, A>)> {
+            i.rhs.syms.get(i.pos).map(|s| {
                 (s, Item {
-                    lhs: i.lhs.clone(),
-                    rhs: i.rhs.clone(),
+                    lhs: i.lhs,
+                    rhs: i.rhs,
                     pos: i.pos + 1,
                 })
             })
         }
-        let mut state = S {
+        let mut state: S<'a, T, N, A> = S {
             states: vec![],
             item_sets: BTreeMap::new(),
             nubs: BTreeMap::new(),
         };
         let mut finished = 0;
         state.complete_nub(self, ItemSet { items: { let mut r = BTreeSet::new(); r.insert(Item {
-            lhs: fake_start.clone(),
-            rhs: vec![Nonterminal(self.start.clone())],
+            lhs: &self.start,
+            rhs: &self.rules.get(&self.start).unwrap()[0],
             pos: 0,
         }); r } });
         while finished < state.states.len() {
             let mut next_nubs = BTreeMap::new();
             for item in state.states[finished].0.items.iter() {
                 if let Some((sym, next)) = advance(item) {
-                    next_nubs.entry(sym.clone()).get().unwrap_or_else(|v| v.insert(BTreeSet::new())).insert(next);
+                    next_nubs.entry(sym).get().unwrap_or_else(|v| v.insert(BTreeSet::new())).insert(next);
                 }
             }
             for (sym, items) in next_nubs.into_iter() {
@@ -135,16 +168,16 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
         }
         LR0StateMachine {
             states: state.states,
-            start: fake_start,
+            start: &self.start,
         }
     }
 
     // returns a map containing:
     // nonterminal => (first set, nullable)
-    pub fn first_sets(&self) -> BTreeMap<N, (BTreeSet<T>, bool)> {
+    pub fn first_sets(&self) -> BTreeMap<&N, (BTreeSet<&T>, bool)> {
         let mut r = BTreeMap::new();
         for (lhs, _) in self.rules.iter() {
-            r.insert(lhs.clone(), RefCell::new((BTreeSet::new(), false)));
+            r.insert(lhs, RefCell::new((BTreeSet::new(), false)));
         }
         loop {
             let mut changed = false;
@@ -153,10 +186,10 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
             for ((lhs, rhses), (_, cell)) in self.rules.iter().zip(r.iter()) {
                 let mut cell = cell.borrow_mut();
                 'outer: for rhs in rhses.iter() {
-                    for sym in rhs.iter() {
+                    for sym in rhs.syms.iter() {
                         match *sym {
                             Terminal(ref t) => {
-                                if cell.0.insert(t.clone()) {
+                                if cell.0.insert(t) {
                                     changed = true;
                                 }
                                 continue 'outer;
@@ -168,8 +201,8 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
                                 }
                             } else {
                                 let them = r.get(n).unwrap().borrow();
-                                for t in them.0.iter() {
-                                    if cell.0.insert(t.clone()) {
+                                for &t in them.0.iter() {
+                                    if cell.0.insert(t) {
                                         changed = true;
                                     }
                                 }
@@ -196,27 +229,27 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
 
     // returns a map containing:
     // nonterminal => (follow set, follow set contains EOF)
-    pub fn follow_sets(&self, first: BTreeMap<N, (BTreeSet<T>, bool)>) -> BTreeMap<N, (BTreeSet<T>, bool)> {
+    pub fn follow_sets<'a>(&'a self, first: BTreeMap<&'a N, (BTreeSet<&'a T>, bool)>) -> BTreeMap<&'a N, (BTreeSet<&'a T>, bool)> {
         let mut r = BTreeMap::new();
         for (lhs, _) in self.rules.iter() {
-            r.insert(lhs.clone(), (BTreeSet::new(), *lhs == self.start));
+            r.insert(lhs, (BTreeSet::new(), *lhs == self.start));
         }
         loop {
             let mut changed = false;
             for (lhs, rhses) in self.rules.iter() {
                 for rhs in rhses.iter() {
                     let mut follow = r.get(lhs).unwrap().clone();
-                    for sym in rhs.iter().rev() {
+                    for sym in rhs.syms.iter().rev() {
                         match *sym {
                             Terminal(ref t) => {
                                 follow.0.clear();
                                 follow.1 = false;
-                                follow.0.insert(t.clone());
+                                follow.0.insert(t);
                             }
                             Nonterminal(ref n) => {
                                 let s = r.get_mut(n).unwrap();
-                                for t in follow.0.iter() {
-                                    if s.0.insert(t.clone()) {
+                                for &t in follow.0.iter() {
+                                    if s.0.insert(t) {
                                         changed = true;
                                     }
                                 }
@@ -229,7 +262,7 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
                                     follow.0.clear();
                                     follow.1 = false;
                                 }
-                                follow.0.extend(f.iter().cloned());
+                                follow.0.extend(f.iter().map(|x| *x));
                             }
                         }
                     }
@@ -243,21 +276,24 @@ impl<T: Ord + Clone, N: Ord + Clone> Grammar<T, N> where T: Show, N: Show {
     }
 }
 
-impl<T: Ord + Clone, N: Ord + Clone> LR0StateMachine<T, N> {
-    pub fn augmented_grammar(&self) -> Grammar<T, (usize, N)> {
+impl<'a, T: Ord + Clone, N: Ord + Clone, A: Clone> LR0StateMachine<'a, T, N, A> {
+    pub fn augmented_grammar(&self) -> Grammar<T, (usize, N), A> {
         let mut r = BTreeMap::new();
         for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
             for item in iset.items.iter() {
                 if item.pos == 0 {
                     let new_lhs = (ix, item.lhs.clone());
-                    let new_rhs = item.rhs.iter().scan(ix, |st, sym| {
-                        let old_st = *st;
-                        *st = *self.states[old_st].1.get(sym).unwrap();
-                        Some(match *sym {
-                            Terminal(ref t) => Terminal(t.clone()),
-                            Nonterminal(ref n) => Nonterminal((old_st, n.clone())),
-                        })
-                    }).collect();
+                    let new_rhs = Rhs {
+                        syms: item.rhs.syms.iter().scan(ix, |st, sym| {
+                            let old_st = *st;
+                            *st = *self.states[old_st].1.get(sym).unwrap();
+                            Some(match *sym {
+                                Terminal(ref t) => Terminal(t.clone()),
+                                Nonterminal(ref n) => Nonterminal((old_st, n.clone())),
+                            })
+                        }).collect(),
+                        act: item.rhs.act.clone(),
+                    };
                     r.entry(new_lhs).get().unwrap_or_else(|v| v.insert(vec![])).push(new_rhs);
                 }
             }
@@ -269,7 +305,7 @@ impl<T: Ord + Clone, N: Ord + Clone> LR0StateMachine<T, N> {
     }
 }
 
-impl<T: Show, N: Show> LR0StateMachine<T, N> {
+impl<'a, T: Show, N: Show, A> LR0StateMachine<'a, T, N, A> {
     pub fn print(&self) {
         println!(r#"
 digraph G {{
@@ -284,11 +320,11 @@ digraph G {{
             for item in iset.items.iter() {
                 print!("{:?} →", item.lhs);
                 for j in 0..item.pos {
-                    print!(" {:?}", item.rhs[j]);
+                    print!(" {:?}", item.rhs.syms[j]);
                 }
                 print!(" •");
-                for j in item.pos..item.rhs.len() {
-                    print!(" {:?}", item.rhs[j]);
+                for j in item.pos..item.rhs.syms.len() {
+                    print!(" {:?}", item.rhs.syms[j]);
                 }
                 print!("<br />\n");
             }

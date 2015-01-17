@@ -11,28 +11,38 @@ macro_rules! map {
     })
 }
 
+fn rhs<T, N, A>(syms: Vec<Symbol<T, N>>, act: A) -> Rhs<T, N, A> {
+    Rhs {
+        syms: syms,
+        act: act,
+    }
+}
+
 fn main() {
     let g = Grammar {
         rules: map![
+            "S" => vec![
+                rhs(vec![Nonterminal("N")], ()),
+            ],
             "N" => vec![
-                vec![Nonterminal("V"),
-                     Terminal("="),
-                     Nonterminal("E")],
-                vec![Nonterminal("E")],
+                rhs(vec![Nonterminal("V"),
+                        Terminal("="),
+                        Nonterminal("E")], ()),
+                rhs(vec![Nonterminal("E")], ()),
             ],
             "E" => vec![
-                vec![Nonterminal("V")]
+                rhs(vec![Nonterminal("V")], ()),
             ],
             "V" => vec![
-                vec![Terminal("x")],
-                vec![Terminal("*"),
-                     Nonterminal("E")]
+                rhs(vec![Terminal("x")], ()),
+                rhs(vec![Terminal("*"),
+                        Nonterminal("E")], ()),
             ]
         ],
-        start: "N"
+        start: "S"
     };
     println!("{:?}", g);
-    let machine = g.lr0_state_machine("S");
+    let machine = g.lr0_state_machine();
     machine.print();
     let ag = machine.augmented_grammar();
     println!("{:?}", ag);
