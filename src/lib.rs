@@ -106,7 +106,7 @@ pub struct LR1ParseTable<'a, T: 'a, N: 'a, A: 'a> {
 }
 
 // FIXME: A doesn't actually have to be Ord
-impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> where T: Show, N: Show {
+impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
     // Creates the LR(0) state machine for a grammar.
     pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {
         struct S<'a, T: 'a, N: 'a, A: 'a> {
