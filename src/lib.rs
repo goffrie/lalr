@@ -13,6 +13,15 @@ pub enum Symbol<T, N> {
     Nonterminal(N),
 }
 
+impl<T: fmt::String, N: fmt::String> fmt::String for Symbol<T, N> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Terminal(ref t) => t.fmt(f),
+            Nonterminal(ref n) => n.fmt(f),
+        }
+    }
+}
+
 impl<T: Show, N: Show> Show for Symbol<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
@@ -103,6 +112,21 @@ pub struct LR1State<'a, T: 'a, N: 'a, A: 'a> {
 #[derive(Show)]
 pub struct LR1ParseTable<'a, T: 'a, N: 'a, A: 'a> {
     pub states: Vec<LR1State<'a, T, N, A>>,
+}
+
+#[derive(Show)]
+pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
+    ReduceReduce {
+        state: ItemSet<'a, T, N, A>,
+        token: Option<&'a T>,
+        r1: (&'a N, &'a Rhs<T, N, A>),
+        r2: (&'a N, &'a Rhs<T, N, A>),
+    },
+    ShiftReduce {
+        state: ItemSet<'a, T, N, A>,
+        token: Option<&'a T>,
+        rule: (&'a N, &'a Rhs<T, N, A>),
+    },
 }
 
 // FIXME: A doesn't actually have to be Ord
@@ -294,7 +318,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
         r
     }
 
-    pub fn lalr1<'a>(&'a self) -> LR1ParseTable<'a, T, N, A>
+    pub fn lalr1<'a>(&'a self) -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
         where T: Show, N: Show, Rhs<T, N, A>: Show {
         let state_machine = self.lr0_state_machine();
         let augmented = state_machine.augmented_grammar();
@@ -350,11 +374,19 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                                 }
                                 LRAction::Reduce(l, r) => {
                                     // Otherwise, we have a reduce/reduce conflict.
-                                    // FIXME: report errors properly
-                                    panic!("reduce-reduce conflict in state {}, token {:?}: {:?} -> {:?} vs {:?} -> {:?}", end_state, t, l, r, lhs, rhs);
+                                    return Err(LR1Conflict::ReduceReduce {
+                                        state: state_machine.states[end_state].0.clone(),
+                                        token: Some(t),
+                                        r1: (l, r),
+                                        r2: (lhs, rhs),
+                                    });
                                 }
-                                LRAction::Shift(st) => {
-                                    panic!("shift-reduce conflict in state {}, token {:?}: state {} vs {:?} -> {:?}", end_state, t, st, lhs, rhs);
+                                LRAction::Shift(_) => {
+                                    return Err(LR1Conflict::ShiftReduce {
+                                        state: state_machine.states[end_state].0.clone(),
+                                        token: Some(t),
+                                        rule: (lhs, rhs),
+                                    });
                                 }
                                 LRAction::Accept => {
                                     unreachable!();
@@ -380,10 +412,19 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                                 // no problem
                             }
                             Some(LRAction::Reduce(l, r)) => {
-                                panic!("reduce-reduce conflict in state {}, on EOF: {:?} -> {:?} vs {:?} -> {:?}", end_state, l, r, lhs, rhs);
+                                return Err(LR1Conflict::ReduceReduce {
+                                    state: state_machine.states[end_state].0.clone(),
+                                    token: None,
+                                    r1: (l, r),
+                                    r2: (lhs, rhs),
+                                });
                             }
-                            Some(LRAction::Shift(st)) => {
-                                panic!("shift-reduce conflict in state {}, on EOF: state {} vs {:?} -> {:?}", end_state, st, lhs, rhs);
+                            Some(LRAction::Shift(_)) => {
+                                return Err(LR1Conflict::ShiftReduce {
+                                    state: state_machine.states[end_state].0.clone(),
+                                    token: None,
+                                    rule: (lhs, rhs),
+                                });
                             }
                             Some(LRAction::Accept) => {
                                 unreachable!();
@@ -398,7 +439,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
             }
         }
 
-        r
+        Ok(r)
     }
 }
 
