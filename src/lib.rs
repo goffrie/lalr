@@ -318,8 +318,8 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
         r
     }
 
-    pub fn lalr1<'a>(&'a self) -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
-        where T: Show, N: Show, Rhs<T, N, A>: Show {
+    pub fn lalr1<'a>(&'a self)
+        -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>> {
         let state_machine = self.lr0_state_machine();
         let augmented = state_machine.augmented_grammar();
         let first_sets = augmented.first_sets();
@@ -355,7 +355,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
             in augmented.rules.iter().zip(follow_sets.iter()) {
 
             debug_assert_eq!(start_state, s2);
-            debug_assert_eq!(lhs, l2);
+            debug_assert!(lhs == l2);
 
             for &Rhs { syms: _, act: (end_state, rhs) }
                 in rhss.iter() {
