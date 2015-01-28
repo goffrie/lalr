@@ -318,8 +318,9 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
         r
     }
 
-    pub fn lalr1<'a>(&'a self)
-        -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>> {
+    pub fn lalr1<'a, FR>(&'a self, mut reduce_on: FR)
+        -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
+    where FR: FnMut(&A, Option<&T>) -> bool {
         let state_machine = self.lr0_state_machine();
         let augmented = state_machine.augmented_grammar();
         let first_sets = augmented.first_sets();
@@ -360,7 +361,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
             for &Rhs { syms: _, act: (end_state, rhs) }
                 in rhss.iter() {
 
-                for &&t in follow.iter() {
+                for &&t in follow.iter().filter(|&&&t| reduce_on(&rhs.act, Some(t))) {
                     match r.states[end_state].lookahead.entry(t) {
                         btree_map::Entry::Vacant(v) => {
                             v.insert(LRAction::Reduce(lhs, rhs));
@@ -396,7 +397,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                     }
                 }
 
-                if eof {
+                if eof && reduce_on(&rhs.act, None) {
                     let state = &mut r.states[end_state];
                     if *lhs == self.start {
                         match state.eof {
