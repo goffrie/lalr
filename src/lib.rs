@@ -445,7 +445,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
 
 impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
     pub fn augmented_grammar(&self) -> Grammar<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)> {
-        let mut r = BTreeMap::new();
+        let mut r: BTreeMap<(usize, &'a N), Vec<Rhs<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)>>> = BTreeMap::new();
         for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
             for item in iset.items.iter() {
                 if item.pos == 0 {
@@ -457,7 +457,13 @@ impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
                             state = *self.states[old_st].1.get(sym).unwrap();
                             match *sym {
                                 Terminal(ref t) => Terminal(t),
-                                Nonterminal(ref n) => Nonterminal((old_st, n)),
+                                Nonterminal(ref n) => {
+                                    let nt = (old_st, n);
+                                    if let btree_map::Entry::Vacant(view) = r.entry(nt) {
+                                        view.insert(vec![]);
+                                    }
+                                    Nonterminal(nt)
+                                }
                             }
                         }).collect(),
                         act: (state, item.rhs),
