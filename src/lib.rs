@@ -3,6 +3,7 @@
 use std::collections::{btree_map, BTreeSet, BTreeMap, RingBuf};
 use std::fmt::{self, Show};
 use std::cell::{RefCell};
+use std::cmp;
 pub use Symbol::*;
 
 // "T" = terminal, and "N" = nonterminal.
@@ -318,9 +319,10 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
         r
     }
 
-    pub fn lalr1<'a, FR>(&'a self, mut reduce_on: FR)
+    pub fn lalr1<'a, FR, FO>(&'a self, mut reduce_on: FR, mut priority_of: FO)
         -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
-    where FR: FnMut(&A, Option<&T>) -> bool {
+    where FR: FnMut(&A, Option<&T>) -> bool,
+          FO: FnMut(&A, Option<&T>) -> i32 {
         let state_machine = self.lr0_state_machine();
         let augmented = state_machine.augmented_grammar();
         let first_sets = augmented.first_sets();
@@ -366,22 +368,32 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                         btree_map::Entry::Vacant(v) => {
                             v.insert(LRAction::Reduce(lhs, rhs));
                         }
-                        btree_map::Entry::Occupied(v) => {
-                            match *v.get() {
+                        btree_map::Entry::Occupied(mut v) => {
+                            match *v.get_mut() {
                                 LRAction::Reduce(l, r) if l == lhs
                                     && r as *const Rhs<T, N, A>
                                        == rhs as *const Rhs<T, N, A> => {
                                     // The cells match, so there's no conflict.
                                 }
-                                LRAction::Reduce(l, r) => {
-                                    // Otherwise, we have a reduce/reduce conflict.
-                                    return Err(LR1Conflict::ReduceReduce {
-                                        state: state_machine.states[end_state].0.clone(),
-                                        token: Some(t),
-                                        r1: (l, r),
-                                        r2: (lhs, rhs),
-                                    });
-                                }
+                                LRAction::Reduce(ref mut l, ref mut r) => match priority_of(&r.act, Some(t)).cmp(&priority_of(&rhs.act, Some(t))) {
+                                    cmp::Ordering::Greater => {
+                                        // `r` overrides `rhs` - do nothing.
+                                    }
+                                    cmp::Ordering::Less => {
+                                        // `rhs` overrides `r`.
+                                        *l = lhs;
+                                        *r = rhs;
+                                    }
+                                    cmp::Ordering::Equal => {
+                                        // Otherwise, we have a reduce/reduce conflict.
+                                        return Err(LR1Conflict::ReduceReduce {
+                                            state: state_machine.states[end_state].0.clone(),
+                                            token: Some(t),
+                                            r1: (*l, *r),
+                                            r2: (lhs, rhs),
+                                        });
+                                    }
+                                },
                                 LRAction::Shift(_) => {
                                     return Err(LR1Conflict::ShiftReduce {
                                         state: state_machine.states[end_state].0.clone(),
@@ -412,14 +424,25 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                                    == rhs as *const Rhs<T, N, A> => {
                                 // no problem
                             }
-                            Some(LRAction::Reduce(l, r)) => {
-                                return Err(LR1Conflict::ReduceReduce {
-                                    state: state_machine.states[end_state].0.clone(),
-                                    token: None,
-                                    r1: (l, r),
-                                    r2: (lhs, rhs),
-                                });
-                            }
+                            Some(LRAction::Reduce(ref mut l, ref mut r)) => match priority_of(&r.act, None).cmp(&priority_of(&rhs.act, None)) {
+                                cmp::Ordering::Greater => {
+                                    // `r` overrides `rhs` - do nothing.
+                                }
+                                cmp::Ordering::Less => {
+                                    // `rhs` overrides `r`.
+                                    *l = lhs;
+                                    *r = rhs;
+                                }
+                                cmp::Ordering::Equal => {
+                                    // We have a reduce/reduce conflict.
+                                    return Err(LR1Conflict::ReduceReduce {
+                                        state: state_machine.states[end_state].0.clone(),
+                                        token: None,
+                                        r1: (*l, *r),
+                                        r2: (lhs, rhs),
+                                    });
+                                }
+                            },
                             Some(LRAction::Shift(_)) => {
                                 return Err(LR1Conflict::ShiftReduce {
                                     state: state_machine.states[end_state].0.clone(),
