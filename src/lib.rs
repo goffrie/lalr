@@ -1,7 +1,5 @@
-#![allow(unstable)]
-
-use std::collections::{btree_map, BTreeSet, BTreeMap, RingBuf};
-use std::fmt::{self, Show};
+use std::collections::{btree_map, BTreeSet, BTreeMap, VecDeque};
+use std::fmt::{self, Debug, Display};
 use std::cell::{RefCell};
 use std::cmp;
 pub use Symbol::*;
@@ -14,7 +12,7 @@ pub enum Symbol<T, N> {
     Nonterminal(N),
 }
 
-impl<T: fmt::String, N: fmt::String> fmt::String for Symbol<T, N> {
+impl<T: Display, N: Display> Display for Symbol<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Terminal(ref t) => t.fmt(f),
@@ -23,7 +21,7 @@ impl<T: fmt::String, N: fmt::String> fmt::String for Symbol<T, N> {
     }
 }
 
-impl<T: Show, N: Show> Show for Symbol<T, N> {
+impl<T: Debug, N: Debug> Debug for Symbol<T, N> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Terminal(ref t) => t.fmt(f),
@@ -31,39 +29,46 @@ impl<T: Show, N: Show> Show for Symbol<T, N> {
         }
     }
 }
-
-#[derive(Show,Clone)]
+macro_rules! item {
+    ($x: item) => ($x);
+}
+// Derive the {Partial,}{Eq,Ord} traits, based on the tuple implementations,
+// for the given fields.
+macro_rules! comparators {
+    ($t: ident($($p: tt)+) ($($s: ident),+) ($($f: ident),+)) => {
+        item!(impl<$($p)+> PartialEq for $t<$($p)+> where $($s: PartialEq),+ {
+            fn eq(&self, other: &Self) -> bool {
+                ($(self.$f),+) == ($(other.$f),+)
+            }
+        });
+        item!(impl<$($p)+> Eq for $t<$($p)+> where $($s: Eq),+ {
+        });
+        item!(impl<$($p)+> PartialOrd for $t<$($p)+> where $($s: PartialOrd),+ {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                ($(self.$f),+).partial_cmp(&($(other.$f),+))
+            }
+        });
+        item!(impl<$($p)+> Ord for $t<$($p)+> where $($s: Ord),+ {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                ($(self.$f),+).cmp(&($(other.$f),+))
+            }
+        });
+    };
+}
+#[derive(Debug,Clone)]
 pub struct Rhs<T, N, A> {
     pub syms: Vec<Symbol<T, N>>,
     pub act: A,
 }
+comparators!(Rhs(T, N, A) (T, N) (syms));
 
-impl<T: PartialEq, N: PartialEq, A> PartialEq for Rhs<T, N, A> {
-    fn eq(&self, other: &Self) -> bool {
-        self.syms == other.syms
-    }
-}
-
-impl<T: Eq, N: Eq, A> Eq for Rhs<T, N, A> { }
-
-impl<T: PartialOrd, N: PartialOrd, A> PartialOrd for Rhs<T, N, A> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.syms.partial_cmp(&other.syms)
-    }
-}
-
-impl<T: Ord, N: Ord, A> Ord for Rhs<T, N, A> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.syms.cmp(&other.syms)
-    }
-}
-
-#[derive(Ord,PartialOrd,Eq,PartialEq,Show)]
+#[derive(Debug)]
 pub struct Item<'a, T: 'a, N: 'a, A: 'a> {
     pub lhs: &'a N,
     pub rhs: &'a Rhs<T, N, A>,
     pub pos: usize,
 }
+comparators!(Item('a, T, N, A) (T, N) (lhs, rhs, pos));
 
 impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
     fn clone(&self) -> Item<'a, T, N, A> {
@@ -71,10 +76,11 @@ impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
     }
 }
 
-#[derive(Ord,PartialOrd,Eq,PartialEq,Show)]
+#[derive(Debug)]
 pub struct ItemSet<'a, T: 'a, N: 'a, A: 'a> {
     pub items: BTreeSet<Item<'a, T, N, A>>,
 }
+comparators!(ItemSet('a, T, N, A) (T, N) (items));
 
 impl<'a, T, N, A> Clone for ItemSet<'a, T, N, A> {
     fn clone(&self) -> ItemSet<'a, T, N, A> {
@@ -82,7 +88,7 @@ impl<'a, T, N, A> Clone for ItemSet<'a, T, N, A> {
     }
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct Grammar<T, N, A> {
     pub rules: BTreeMap<N, Vec<Rhs<T, N, A>>>,
     // `start` must have exactly one rule of the form "`start` -> N", for some nonterminal N,
@@ -90,32 +96,32 @@ pub struct Grammar<T, N, A> {
     pub start: N,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct LR0StateMachine<'a, T: 'a, N: 'a, A: 'a> {
     pub states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
     pub start: &'a N,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub enum LRAction<'a, T: 'a, N: 'a, A: 'a> {
     Reduce(&'a N, &'a Rhs<T, N, A>),
     Shift(usize),
     Accept,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct LR1State<'a, T: 'a, N: 'a, A: 'a> {
     pub eof: Option<LRAction<'a, T, N, A>>,
     pub lookahead: BTreeMap<&'a T, LRAction<'a, T, N, A>>,
     pub goto: BTreeMap<&'a N, usize>,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub struct LR1ParseTable<'a, T: 'a, N: 'a, A: 'a> {
     pub states: Vec<LR1State<'a, T, N, A>>,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
     ReduceReduce {
         state: ItemSet<'a, T, N, A>,
@@ -130,8 +136,7 @@ pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
     },
 }
 
-// FIXME: A doesn't actually have to be Ord
-impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
+impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
     // Creates the LR(0) state machine for a grammar.
     pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {
         struct S<'a, T: 'a, N: 'a, A: 'a> {
@@ -139,7 +144,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
             item_sets: BTreeMap<ItemSet<'a, T, N, A>, usize>,
             nubs: BTreeMap<ItemSet<'a, T, N, A>, usize>,
         }
-        impl<'a, T: Ord, N: Ord, A: Ord> S<'a, T, N, A> {
+        impl<'a, T: Ord, N: Ord, A> S<'a, T, N, A> {
             fn item_set(&mut self, item_set: ItemSet<'a, T, N, A>) -> usize {
                 if let Some(&ix) = self.item_sets.get(&item_set) {
                     return ix;
@@ -154,7 +159,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
                     return ix;
                 }
                 let mut completed: BTreeSet<_> = nub.items.clone();
-                let mut to_add: RingBuf<_> = nub.items.iter().cloned().collect();
+                let mut to_add: VecDeque<_> = nub.items.iter().cloned().collect();
                 while let Some(item) = to_add.pop_front() {
                     if let Some(&Nonterminal(ref n)) = item.rhs.syms.get(item.pos) {
                         if let Some(rules) = grammar.rules.get(n) {
@@ -201,7 +206,7 @@ impl<T: Ord, N: Ord, A: Ord> Grammar<T, N, A> {
             let mut next_nubs = BTreeMap::new();
             for item in state.states[finished].0.items.iter() {
                 if let Some((sym, next)) = advance(item) {
-                    next_nubs.entry(sym).get().unwrap_or_else(|v| v.insert(BTreeSet::new())).insert(next);
+                    next_nubs.entry(sym).or_insert(BTreeSet::new()).insert(next);
                 }
             }
             for (sym, items) in next_nubs.into_iter() {
@@ -492,7 +497,7 @@ impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
                         }).collect(),
                         act: (state, item.rhs),
                     };
-                    r.entry(new_lhs).get().unwrap_or_else(|v| v.insert(vec![])).push(new_rhs);
+                    r.entry(new_lhs).or_insert(vec![]).push(new_rhs);
                 }
             }
         }
@@ -503,7 +508,7 @@ impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
     }
 }
 
-impl<'a, T: Show, N: Show, A> LR0StateMachine<'a, T, N, A> {
+impl<'a, T: Debug, N: Debug, A> LR0StateMachine<'a, T, N, A> {
     pub fn print(&self) {
         println!(r#"
 digraph G {{
