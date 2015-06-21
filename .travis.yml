@@ -1,24 +1,20 @@
-# thanks huonw
 language: rust
 sudo: required
 rust:
-  - nightly
-  - beta
-  - 1.0.0
-
+- nightly
+- beta
+- 1.0.0
 before_script:
-  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
-
+- pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 script:
-  - |
-      travis-cargo build &&
-      travis-cargo test &&
-      travis-cargo doc
-
+- |
+  travis-cargo build &&
+  travis-cargo test &&
+  travis-cargo doc
 after_success:
-  - travis-cargo --only nightly doc-upload
-  - travis-cargo coveralls
-
+- travis-cargo --only nightly doc-upload
+- travis-cargo coveralls
 env:
   global:
-    secure: BwDmMvZd7LbcavO6B5lLAzeUAreqxktHlZSzhC1iQL52WT0KLtKaHwWwZXsrSvZN3L+5VgvFu/RBEPruAB2I1ek6H2/8JMgpNfK6S2PUJzzLCeQJoW+C6nWQuirwu3BCuV7MiAXW0BDSTBkr8bmxJ9/0ZgMNCWe9FQ2jRw8HtG0=
+  - TRAVIS_CARGO_NIGHTLY_FEATURE=""
+  - secure: SeaKa6AXL1IGVj1/4JJC9DiSvOVcrpH19hEuoprw30/W48xxszP9iJWTSJCfUNpdpBLPEBnUPp6TgiRxRlYUXSn2u6WhnUT3iDtumSy6uqYENqfTmk2p4Wo5dWkV51crbPVj9ZquNEvk7igJUiL1TKKmfkVdwD1E+eJhEnYayF90KsJZFqN5WLcfBI3S9+ECZHL2dNNy14qTXyj/P73JaLIqiC1DSFJHk/47Y25HtbIqKeojJxyVrLHd6bBPxI/1Ust0L4+TE8j/4SnuYiCIGkAxIyOEKQ/pbGxeLD5WxzVfq0HTT3XQj3Bb6hDI6dbv6YW/aXzKHw/Ex5JDJU3SMv4jfxIwTgjKevr9M671dBnXS5kI+SyPAMnig1+1Bod/SoKMdobazyimswzXRXUVlnV7HNAXt9Yw95BVkYdwOfSAbUFH/a2wpI15GpEi0S/3bgdk3zOF3P3XqHVsPQbTU0ngI1z5tDgzW9tpVrgDlmc3mtkGyfL764LcX6kdgBOqW5OZ/EeZFz+IRtU4QIJFY+jBiR7LwQgqFqiQ45yKC6S0dlKg/85b+xvnUaUJ3XnhACRNuEFfCl0i5f+Cj53LBMrO1rRsQfRa5VhWCzEVX7F8YsMAUnt6IKmvGPDteSxRRGN0lNFm/m8+aSGASUaPjwNDnw1QDO8Okgu/r2BWWaE=
