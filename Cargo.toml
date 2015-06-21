@@ -3,3 +3,13 @@
 name = "lalr"
 version = "0.0.1"
 authors = ["Geoffry Song <goffrie@gmail.com>"]
+
+homepage = "https://github.com/goffrie/lalr"
+repository = "https://github.com/goffrie/lalr"
+documentation = "http://goffrie.github.io/lalr"
+license = "MIT"
+keywords = ["lalr", "parsing"]
+
+[lib]
+
+name = "lalr"

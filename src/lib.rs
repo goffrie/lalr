@@ -1,11 +1,22 @@
+//! This crate provides data structures for context-free grammars and LR(1) state machines, and an
+//! algorithm to convert a context-free grammar into an LR(1) state machine by the LALR(1)
+//! construction.
+//!
+//! To use this crate, you should create a [`Grammar`](struct.Grammar.html) and call
+//! [`lalr1`](struct.Grammar.html#method.lalr1). Then you can use the
+//! [`LR1ParseTable`](struct.LR1ParseTable.html) to create your own parser.
+
 use std::collections::{btree_map, BTreeSet, BTreeMap, VecDeque};
 use std::fmt::{self, Debug, Display};
 use std::cell::{RefCell};
 use std::cmp;
 pub use Symbol::*;
 
+#[cfg(test)] mod tests;
+
 // "T" = terminal, and "N" = nonterminal.
 
+/// A symbol in a context-free grammar.
 #[derive(Ord,PartialOrd,Eq,PartialEq,Clone)]
 pub enum Symbol<T, N> {
     Terminal(T),
@@ -55,13 +66,20 @@ macro_rules! comparators {
         });
     };
 }
+
+/// The right-hand side of a rule in a context-free grammar.
 #[derive(Debug,Clone)]
 pub struct Rhs<T, N, A> {
     pub syms: Vec<Symbol<T, N>>,
+    /// An action associated with this rule.
+    /// This can be any data you want to attach to a rule.
+    ///
+    /// This field is ignored by the `Eq` and `Ord` instances.
     pub act: A,
 }
 comparators!(Rhs(T, N, A) (T, N) (syms));
 
+/// An item in an LR(0) state machine, consisting of a rule with a distinguished current position.
 #[derive(Debug)]
 pub struct Item<'a, T: 'a, N: 'a, A: 'a> {
     pub lhs: &'a N,
@@ -76,6 +94,7 @@ impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
     }
 }
 
+/// A set of `Item`s, forming a state in an LR(0) state machine.
 #[derive(Debug)]
 pub struct ItemSet<'a, T: 'a, N: 'a, A: 'a> {
     pub items: BTreeSet<Item<'a, T, N, A>>,
@@ -88,56 +107,83 @@ impl<'a, T, N, A> Clone for ItemSet<'a, T, N, A> {
     }
 }
 
+/// A context-free grammar.
 #[derive(Debug)]
 pub struct Grammar<T, N, A> {
+    /// The rules for each nonterminal.
     pub rules: BTreeMap<N, Vec<Rhs<T, N, A>>>,
-    // `start` must have exactly one rule of the form "`start` -> N", for some nonterminal N,
-    // and not be referred to elsewhere in the grammar.
+    /// The starting state.
+    /// There must be exactly one rule of the form "`start` -> N", for some nonterminal N.
+    /// `start` must not be referred to elsewhere in the grammar.
     pub start: N,
 }
 
+/// An LR(0) state machine.
 #[derive(Debug)]
 pub struct LR0StateMachine<'a, T: 'a, N: 'a, A: 'a> {
+    /// A vector of states, each of which consists of an item set and a set of transitions.
+    ///
+    /// State 0 is the starting state.
     pub states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
+    /// The starting state of the associated context-free grammar.
     pub start: &'a N,
 }
 
+/// An action in an LR(1) parse table.
 #[derive(Debug)]
 pub enum LRAction<'a, T: 'a, N: 'a, A: 'a> {
+    /// Reduce by the given rule.
     Reduce(&'a N, &'a Rhs<T, N, A>),
+    /// Shift, moving to the given state.
     Shift(usize),
+    /// Accept, ending the parse.
     Accept,
 }
 
+/// A state in an LR(1) parse table.
 #[derive(Debug)]
 pub struct LR1State<'a, T: 'a, N: 'a, A: 'a> {
+    /// The action if the lookahead is EOF.
     pub eof: Option<LRAction<'a, T, N, A>>,
+    /// The actions for each non-EOF lookahead.
     pub lookahead: BTreeMap<&'a T, LRAction<'a, T, N, A>>,
+    /// The state to jump to when shifting a nonterminal (because of a reduce rule).
     pub goto: BTreeMap<&'a N, usize>,
 }
 
+/// An LR(1) parse table.
 #[derive(Debug)]
 pub struct LR1ParseTable<'a, T: 'a, N: 'a, A: 'a> {
     pub states: Vec<LR1State<'a, T, N, A>>,
 }
 
+/// A conflict detected while trying to construct an LR(1) parse table.
 #[derive(Debug)]
 pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
+    /// A reduce-reduce conflict.
     ReduceReduce {
+        /// The LR(0) state in which the conflict occurs.
         state: ItemSet<'a, T, N, A>,
+        /// The token leading to the conflict, or `None` if the token is EOF.
         token: Option<&'a T>,
+        /// The first conflicting rule.
         r1: (&'a N, &'a Rhs<T, N, A>),
+        /// The second conflicting rule.
         r2: (&'a N, &'a Rhs<T, N, A>),
     },
+    /// A shift-reduce conflict.
     ShiftReduce {
+        /// The LR(0) state in which the conflict appears.
         state: ItemSet<'a, T, N, A>,
+        /// The token leading to the conflict, or `None` if the token is EOF.
         token: Option<&'a T>,
+        /// The reduce rule involved in the conflict.
         rule: (&'a N, &'a Rhs<T, N, A>),
     },
 }
 
 impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
-    // Creates the LR(0) state machine for a grammar.
+    /// Create the LR(0) state machine for a grammar.
     pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {
         struct S<'a, T: 'a, N: 'a, A: 'a> {
             states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
@@ -221,8 +267,8 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         }
     }
 
-    // returns a map containing:
-    // nonterminal => (first set, nullable)
+    /// Compute the FIRST sets of the grammar.
+    /// Returns a map from nonterminal to (first set, nullable).
     pub fn first_sets(&self) -> BTreeMap<&N, (BTreeSet<&T>, bool)> {
         let mut r = BTreeMap::new();
         for (lhs, _) in self.rules.iter() {
@@ -276,8 +322,8 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         r.into_iter().map(|(k, v)| (k, v.into_inner())).collect()
     }
 
-    // returns a map containing:
-    // nonterminal => (follow set, follow set contains EOF)
+    /// Compute the FOLLOW sets of the grammar.
+    /// Returns a map mapping from nonterminal to (follow set, whether follow set contains EOF)
     pub fn follow_sets<'a>(&'a self, first: BTreeMap<&'a N, (BTreeSet<&'a T>, bool)>) -> BTreeMap<&'a N, (BTreeSet<&'a T>, bool)> {
         let mut r = BTreeMap::new();
         for (lhs, _) in self.rules.iter() {
@@ -324,14 +370,27 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         r
     }
 
+    /// Try to create an LALR(1) parse table out of the grammar.
+    ///
+    /// You can tweak the behaviour of the parser in two ways:
+    ///
+    /// - `reduce_on` is a predicate, allowing you to control certain reduce rules based on the
+    ///   lookahead token. This function takes two parameters: the rule, given by its right-hand
+    ///   side, and the lookahead token (or `None` for EOF). You can use this to resolve
+    ///   shift-reduce conflicts. For example, you can solve the "dangling else" problem by
+    ///   forbidding the reduce action on an `else` token.
+    /// - `priority_of` allows you to resolve reduce-reduce conflicts, by giving reduce rules
+    ///   different "priorities". This takes the same parameters as `reduce_on`, so you can vary
+    ///   the priority based on the lookahead token. If there would be a reduce-reduce conflict
+    ///   between rules, but they have different priority, the one with higher priority is used.
     pub fn lalr1<'a, FR, FO>(&'a self, mut reduce_on: FR, mut priority_of: FO)
         -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
-    where FR: FnMut(&A, Option<&T>) -> bool,
-          FO: FnMut(&A, Option<&T>) -> i32 {
+    where FR: FnMut(&Rhs<T, N, A>, Option<&T>) -> bool,
+          FO: FnMut(&Rhs<T, N, A>, Option<&T>) -> i32 {
         let state_machine = self.lr0_state_machine();
-        let augmented = state_machine.augmented_grammar();
-        let first_sets = augmented.first_sets();
-        let follow_sets = augmented.follow_sets(first_sets);
+        let extended = state_machine.extended_grammar();
+        let first_sets = extended.first_sets();
+        let follow_sets = extended.follow_sets(first_sets);
         let mut r = LR1ParseTable {
             states: state_machine.states.iter().map(|_| LR1State {
                 eof: None,
@@ -360,7 +419,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         // add reductions
         for ((&(start_state, lhs), rhss),
              (&&(s2, l2), &(ref follow, eof)))
-            in augmented.rules.iter().zip(follow_sets.iter()) {
+            in extended.rules.iter().zip(follow_sets.iter()) {
 
             debug_assert_eq!(start_state, s2);
             debug_assert!(lhs == l2);
@@ -368,7 +427,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
             for &Rhs { syms: _, act: (end_state, rhs) }
                 in rhss.iter() {
 
-                for &&t in follow.iter().filter(|&&&t| reduce_on(&rhs.act, Some(t))) {
+                for &&t in follow.iter().filter(|&&&t| reduce_on(rhs, Some(t))) {
                     match r.states[end_state].lookahead.entry(t) {
                         btree_map::Entry::Vacant(v) => {
                             v.insert(LRAction::Reduce(lhs, rhs));
@@ -380,7 +439,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                        == rhs as *const Rhs<T, N, A> => {
                                     // The cells match, so there's no conflict.
                                 }
-                                LRAction::Reduce(ref mut l, ref mut r) => match priority_of(&r.act, Some(t)).cmp(&priority_of(&rhs.act, Some(t))) {
+                                LRAction::Reduce(ref mut l, ref mut r) => match priority_of(r, Some(t)).cmp(&priority_of(rhs, Some(t))) {
                                     cmp::Ordering::Greater => {
                                         // `r` overrides `rhs` - do nothing.
                                     }
@@ -414,7 +473,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                     }
                 }
 
-                if eof && reduce_on(&rhs.act, None) {
+                if eof && reduce_on(rhs, None) {
                     let state = &mut r.states[end_state];
                     if *lhs == self.start {
                         match state.eof {
@@ -429,7 +488,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                    == rhs as *const Rhs<T, N, A> => {
                                 // no problem
                             }
-                            Some(LRAction::Reduce(ref mut l, ref mut r)) => match priority_of(&r.act, None).cmp(&priority_of(&rhs.act, None)) {
+                            Some(LRAction::Reduce(ref mut l, ref mut r)) => match priority_of(r, None).cmp(&priority_of(rhs, None)) {
                                 cmp::Ordering::Greater => {
                                     // `r` overrides `rhs` - do nothing.
                                 }
@@ -473,7 +532,9 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
 }
 
 impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
-    pub fn augmented_grammar(&self) -> Grammar<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)> {
+    /// Create an LALR(1) extended grammar, as described
+    /// [here](http://web.cs.dal.ca/~sjackson/lalr1.html).
+    pub fn extended_grammar(&self) -> Grammar<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)> {
         let mut r: BTreeMap<(usize, &'a N), Vec<Rhs<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)>>> = BTreeMap::new();
         for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
             for item in iset.items.iter() {
@@ -509,6 +570,7 @@ impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
 }
 
 impl<'a, T: Debug, N: Debug, A> LR0StateMachine<'a, T, N, A> {
+    /// Print the state machine in graphviz format.
     pub fn print(&self) {
         println!(r#"
 digraph G {{
