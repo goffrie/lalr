@@ -8,7 +8,7 @@ description = "a library for creating LALR(1) parsers from context-free grammars
 homepage = "https://github.com/goffrie/lalr"
 repository = "https://github.com/goffrie/lalr"
 documentation = "http://goffrie.github.io/lalr"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 keywords = ["lalr", "parsing"]
 
 [lib]
