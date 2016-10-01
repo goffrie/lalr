@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Grammar` struct in crate `lalr`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Grammar">
+
+    <title>lalr::Grammar - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>lalr</a></p><script>window.sidebarCurrent = {name: 'Grammar', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>lalr</a>::<wbr><a class='struct' href=''>Grammar</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-462' class='srclink' href='../src/lalr/src/lib.rs.html#112-119' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Grammar&lt;T,&nbsp;N,&nbsp;A&gt; {
+    pub rules: <a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;N,&nbsp;<a class='struct' href='https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../lalr/struct.Rhs.html' title='lalr::Rhs'>Rhs</a>&lt;T,&nbsp;N,&nbsp;A&gt;&gt;&gt;,
+    pub start: N,
+}</pre><div class='docblock'><p>A context-free grammar.</p>
+</div><h2 class='fields'>Fields</h2><span id='structfield.rules' class='structfield'>
+                           <span id='rules.v' class='invisible'>
+                           <code>rules: <a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;N,&nbsp;<a class='struct' href='https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../lalr/struct.Rhs.html' title='lalr::Rhs'>Rhs</a>&lt;T,&nbsp;N,&nbsp;A&gt;&gt;&gt;</code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>The rules for each nonterminal.</p>
+</div><span id='structfield.start' class='structfield'>
+                           <span id='start.v' class='invisible'>
+                           <code>start: N</code>
+                           </span></span><span class='stab '></span><div class='docblock'><p>The starting state.
+There must be exactly one rule of the form &quot;<code>start</code> -&gt; N&quot;, for some nonterminal N.
+<code>start</code> must not be referred to elsewhere in the grammar.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.Ord.html' title='core::cmp::Ord'>Ord</a>,&nbsp;N:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.Ord.html' title='core::cmp::Ord'>Ord</a>,&nbsp;A&gt; <a class='struct' href='../lalr/struct.Grammar.html' title='lalr::Grammar'>Grammar</a>&lt;T,&nbsp;N,&nbsp;A&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-39' class='srclink' href='../src/lalr/src/lib.rs.html#185-532' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.lr0_state_machine' class='method'><span id='lr0_state_machine.v' class='invisible'><code>fn <a href='#method.lr0_state_machine' class='fnname'>lr0_state_machine</a>&lt;'a&gt;(&amp;'a self) -&gt; <a class='struct' href='../lalr/struct.LR0StateMachine.html' title='lalr::LR0StateMachine'>LR0StateMachine</a>&lt;'a,&nbsp;T,&nbsp;N,&nbsp;A&gt;</code></span></h4>
+<div class='docblock'><p>Create the LR(0) state machine for a grammar.</p>
+</div><h4 id='method.first_sets' class='method'><span id='first_sets.v' class='invisible'><code>fn <a href='#method.first_sets' class='fnname'>first_sets</a>(&amp;self) -&gt; <a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;&amp;N,&nbsp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a><a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/set/struct.BTreeSet.html' title='collections::btree::set::BTreeSet'>BTreeSet</a>&lt;&amp;T&gt;, <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a>&gt;</code></span></h4>
+<div class='docblock'><p>Compute the FIRST sets of the grammar.
+Returns a map from nonterminal to (first set, nullable).</p>
+</div><h4 id='method.follow_sets' class='method'><span id='follow_sets.v' class='invisible'><code>fn <a href='#method.follow_sets' class='fnname'>follow_sets</a>&lt;'a&gt;(&amp;'a self, first: <a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;&amp;'a N,&nbsp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a><a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/set/struct.BTreeSet.html' title='collections::btree::set::BTreeSet'>BTreeSet</a>&lt;&amp;'a T&gt;, <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a>&gt;) -&gt; <a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/map/struct.BTreeMap.html' title='collections::btree::map::BTreeMap'>BTreeMap</a>&lt;&amp;'a N,&nbsp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a><a class='struct' href='https://doc.rust-lang.org/nightly/collections/btree/set/struct.BTreeSet.html' title='collections::btree::set::BTreeSet'>BTreeSet</a>&lt;&amp;'a T&gt;, <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a>&gt;</code></span></h4>
+<div class='docblock'><p>Compute the FOLLOW sets of the grammar.
+Returns a map mapping from nonterminal to (follow set, whether follow set contains EOF)</p>
+</div><h4 id='method.lalr1' class='method'><span id='lalr1.v' class='invisible'><code>fn <a href='#method.lalr1' class='fnname'>lalr1</a>&lt;'a,&nbsp;FR,&nbsp;FO&gt;(&amp;'a self, reduce_on: FR, priority_of: FO) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='../lalr/struct.LR1ParseTable.html' title='lalr::LR1ParseTable'>LR1ParseTable</a>&lt;'a,&nbsp;T,&nbsp;N,&nbsp;A&gt;,&nbsp;<a class='enum' href='../lalr/enum.LR1Conflict.html' title='lalr::LR1Conflict'>LR1Conflict</a>&lt;'a,&nbsp;T,&nbsp;N,&nbsp;A&gt;&gt; <span class='where'>where FR: <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.FnMut.html' title='core::ops::FnMut'>FnMut</a>(&amp;<a class='struct' href='../lalr/struct.Rhs.html' title='lalr::Rhs'>Rhs</a>&lt;T,&nbsp;N,&nbsp;A&gt;, <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;&amp;T&gt;) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>, FO: <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.FnMut.html' title='core::ops::FnMut'>FnMut</a>(&amp;<a class='struct' href='../lalr/struct.Rhs.html' title='lalr::Rhs'>Rhs</a>&lt;T,&nbsp;N,&nbsp;A&gt;, <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;&amp;T&gt;) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.i32.html'>i32</a></span></code></span></h4>
+<div class='docblock'><p>Try to create an LALR(1) parse table out of the grammar.</p>
+
+<p>You can tweak the behaviour of the parser in two ways:</p>
+
+<ul>
+<li><code>reduce_on</code> is a predicate, allowing you to control certain reduce rules based on the
+lookahead token. This function takes two parameters: the rule, given by its right-hand
+side, and the lookahead token (or <code>None</code> for EOF). You can use this to resolve
+shift-reduce conflicts. For example, you can solve the &quot;dangling else&quot; problem by
+forbidding the reduce action on an <code>else</code> token.</li>
+<li><code>priority_of</code> allows you to resolve reduce-reduce conflicts, by giving reduce rules
+different &quot;priorities&quot;. This takes the same parameters as <code>reduce_on</code>, so you can vary
+the priority based on the lookahead token. If there would be a reduce-reduce conflict
+between rules, but they have different priority, the one with higher priority is used.</li>
+</ul>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>,&nbsp;N:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>,&nbsp;A:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../lalr/struct.Grammar.html' title='lalr::Grammar'>Grammar</a>&lt;T,&nbsp;N,&nbsp;A&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a id='src-468' class='srclink' href='../src/lalr/src/lib.rs.html#111' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.fmt' class='method'><span id='fmt.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#tymethod.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></span></h4>
+<div class='docblock'><p>Formats the value using the given formatter.</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "lalr";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>
