@@ -533,7 +533,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
 
 impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
     /// Create an LALR(1) extended grammar, as described
-    /// [here](http://web.cs.dal.ca/~sjackson/lalr1.html).
+    /// [here](https://web.archive.org/web/20211216015406/https://web.cs.dal.ca/~sjackson/lalr1.html).
     pub fn extended_grammar(&self) -> Grammar<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)> {
         let mut r: BTreeMap<(usize, &'a N), Vec<Rhs<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)>>> = BTreeMap::new();
         for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
