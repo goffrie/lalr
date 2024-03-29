@@ -6,18 +6,19 @@
 //! [`lalr1`](struct.Grammar.html#method.lalr1). Then you can use the
 //! [`LR1ParseTable`](struct.LR1ParseTable.html) to create your own parser.
 
-use std::collections::{btree_map, BTreeSet, BTreeMap, VecDeque};
-use std::fmt::{self, Debug, Display};
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::cmp;
+use std::collections::{btree_map, BTreeMap, BTreeSet, VecDeque};
+use std::fmt::{self, Debug, Display};
 pub use Symbol::*;
 
-#[cfg(test)] mod tests;
+#[cfg(test)]
+mod tests;
 
 // "T" = terminal, and "N" = nonterminal.
 
 /// A symbol in a context-free grammar.
-#[derive(Ord,PartialOrd,Eq,PartialEq,Clone)]
+#[derive(Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub enum Symbol<T, N> {
     Terminal(T),
     Nonterminal(N),
@@ -41,7 +42,9 @@ impl<T: Debug, N: Debug> Debug for Symbol<T, N> {
     }
 }
 macro_rules! item {
-    ($x: item) => ($x);
+    ($x: item) => {
+        $x
+    };
 }
 // Derive the {Partial,}{Eq,Ord} traits, based on the tuple implementations,
 // for the given fields.
@@ -68,7 +71,7 @@ macro_rules! comparators {
 }
 
 /// The right-hand side of a rule in a context-free grammar.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Rhs<T, N, A> {
     pub syms: Vec<Symbol<T, N>>,
     /// An action associated with this rule.
@@ -77,7 +80,7 @@ pub struct Rhs<T, N, A> {
     /// This field is ignored by the `Eq` and `Ord` instances.
     pub act: A,
 }
-comparators!(Rhs(T, N, A) (T, N) (syms));
+comparators!(Rhs(T, N, A)(T, N)(syms));
 
 /// An item in an LR(0) state machine, consisting of a rule with a distinguished current position.
 #[derive(Debug)]
@@ -90,7 +93,11 @@ comparators!(Item('a, T, N, A) (T, N) (lhs, rhs, pos));
 
 impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
     fn clone(&self) -> Item<'a, T, N, A> {
-        Item { lhs: self.lhs, rhs: self.rhs, pos: self.pos }
+        Item {
+            lhs: self.lhs,
+            rhs: self.rhs,
+            pos: self.pos,
+        }
     }
 }
 
@@ -103,7 +110,9 @@ comparators!(ItemSet('a, T, N, A) (T, N) (items));
 
 impl<'a, T, N, A> Clone for ItemSet<'a, T, N, A> {
     fn clone(&self) -> ItemSet<'a, T, N, A> {
-        ItemSet { items: self.items.clone() }
+        ItemSet {
+            items: self.items.clone(),
+        }
     }
 }
 
@@ -118,13 +127,15 @@ pub struct Grammar<T, N, A> {
     pub start: N,
 }
 
+type LR0State<'a, T, N, A> = (ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>);
+
 /// An LR(0) state machine.
 #[derive(Debug)]
 pub struct LR0StateMachine<'a, T: 'a, N: 'a, A: 'a> {
     /// A vector of states, each of which consists of an item set and a set of transitions.
     ///
     /// State 0 is the starting state.
-    pub states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
+    pub states: Vec<LR0State<'a, T, N, A>>,
     /// The starting state of the associated context-free grammar.
     pub start: &'a N,
 }
@@ -186,7 +197,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
     /// Create the LR(0) state machine for a grammar.
     pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {
         struct S<'a, T: 'a, N: 'a, A: 'a> {
-            states: Vec<(ItemSet<'a, T, N, A>, BTreeMap<&'a Symbol<T, N>, usize>)>,
+            states: Vec<LR0State<'a, T, N, A>>,
             item_sets: BTreeMap<ItemSet<'a, T, N, A>, usize>,
             nubs: BTreeMap<ItemSet<'a, T, N, A>, usize>,
         }
@@ -200,19 +211,23 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                 self.states.push((item_set, BTreeMap::new()));
                 ix
             }
-            fn complete_nub(&mut self, grammar: &'a Grammar<T, N, A>, nub: ItemSet<'a, T, N, A>) -> usize {
+            fn complete_nub(
+                &mut self,
+                grammar: &'a Grammar<T, N, A>,
+                nub: ItemSet<'a, T, N, A>,
+            ) -> usize {
                 if let Some(&ix) = self.nubs.get(&nub) {
                     return ix;
                 }
                 let mut completed: BTreeSet<_> = nub.items.clone();
                 let mut to_add: VecDeque<_> = nub.items.iter().cloned().collect();
                 while let Some(item) = to_add.pop_front() {
-                    if let Some(&Nonterminal(ref n)) = item.rhs.syms.get(item.pos) {
+                    if let Some(Nonterminal(ref n)) = item.rhs.syms.get(item.pos) {
                         if let Some(rules) = grammar.rules.get(n) {
                             for rhs in rules.iter() {
                                 let new_item = Item {
                                     lhs: n,
-                                    rhs: rhs,
+                                    rhs,
                                     pos: 0,
                                 };
                                 if !completed.contains(&new_item) {
@@ -228,13 +243,18 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                 ix
             }
         }
-        fn advance<'a, 'b, T, N, A>(i: &'b Item<'a, T, N, A>) -> Option<(&'a Symbol<T, N>, Item<'a, T, N, A>)> {
+        type SymbolItem<'a, T, N, A> = (&'a Symbol<T, N>, Item<'a, T, N, A>);
+
+        fn advance<'a, T, N, A>(i: &Item<'a, T, N, A>) -> Option<SymbolItem<'a, T, N, A>> {
             i.rhs.syms.get(i.pos).map(|s| {
-                (s, Item {
-                    lhs: i.lhs,
-                    rhs: i.rhs,
-                    pos: i.pos + 1,
-                })
+                (
+                    s,
+                    Item {
+                        lhs: i.lhs,
+                        rhs: i.rhs,
+                        pos: i.pos + 1,
+                    },
+                )
             })
         }
         let mut state: S<'a, T, N, A> = S {
@@ -243,11 +263,20 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
             nubs: BTreeMap::new(),
         };
         let mut finished = 0;
-        state.complete_nub(self, ItemSet { items: { let mut r = BTreeSet::new(); r.insert(Item {
-            lhs: &self.start,
-            rhs: &self.rules.get(&self.start).unwrap()[0],
-            pos: 0,
-        }); r } });
+        state.complete_nub(
+            self,
+            ItemSet {
+                items: {
+                    let mut r = BTreeSet::new();
+                    r.insert(Item {
+                        lhs: &self.start,
+                        rhs: &self.rules.get(&self.start).unwrap()[0],
+                        pos: 0,
+                    });
+                    r
+                },
+            },
+        );
         while finished < state.states.len() {
             let mut next_nubs = BTreeMap::new();
             for item in state.states[finished].0.items.iter() {
@@ -256,7 +285,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                 }
             }
             for (sym, items) in next_nubs.into_iter() {
-                let ix = state.complete_nub(self, ItemSet { items: items });
+                let ix = state.complete_nub(self, ItemSet { items });
                 state.states[finished].1.insert(sym, ix);
             }
             finished += 1;
@@ -289,23 +318,25 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                 }
                                 continue 'outer;
                             }
-                            Nonterminal(ref n) => if n == lhs {
-                                // refers to `lhs`; no need to add own set elements
-                                if !cell.1 {
-                                    continue 'outer;
-                                }
-                            } else {
-                                let them = r.get(n).unwrap().borrow();
-                                for &t in them.0.iter() {
-                                    if cell.0.insert(t) {
-                                        changed = true;
+                            Nonterminal(ref n) => {
+                                if n == lhs {
+                                    // refers to `lhs`; no need to add own set elements
+                                    if !cell.1 {
+                                        continue 'outer;
+                                    }
+                                } else {
+                                    let them = r.get(n).unwrap().borrow();
+                                    for &t in them.0.iter() {
+                                        if cell.0.insert(t) {
+                                            changed = true;
+                                        }
+                                    }
+                                    if !them.1 {
+                                        // stop if it's not nullable
+                                        continue 'outer;
                                     }
                                 }
-                                if !them.1 {
-                                    // stop if it's not nullable
-                                    continue 'outer;
-                                }
-                            },
+                            }
                         }
                     }
                     if !cell.1 {
@@ -324,7 +355,10 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
 
     /// Compute the FOLLOW sets of the grammar.
     /// Returns a map mapping from nonterminal to (follow set, whether follow set contains EOF)
-    pub fn follow_sets<'a>(&'a self, first: BTreeMap<&'a N, (BTreeSet<&'a T>, bool)>) -> BTreeMap<&'a N, (BTreeSet<&'a T>, bool)> {
+    pub fn follow_sets<'a>(
+        &'a self,
+        first: BTreeMap<&'a N, (BTreeSet<&'a T>, bool)>,
+    ) -> BTreeMap<&'a N, (BTreeSet<&'a T>, bool)> {
         let mut r = BTreeMap::new();
         for (lhs, _) in self.rules.iter() {
             r.insert(lhs, (BTreeSet::new(), *lhs == self.start));
@@ -357,7 +391,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                     follow.0.clear();
                                     follow.1 = false;
                                 }
-                                follow.0.extend(f.iter().map(|x| *x));
+                                follow.0.extend(f.iter().copied());
                             }
                         }
                     }
@@ -383,24 +417,33 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
     ///   different "priorities". This takes the same parameters as `reduce_on`, so you can vary
     ///   the priority based on the lookahead token. If there would be a reduce-reduce conflict
     ///   between rules, but they have different priority, the one with higher priority is used.
-    pub fn lalr1<'a, FR, FO>(&'a self, mut reduce_on: FR, mut priority_of: FO)
-        -> Result<LR1ParseTable<'a, T, N, A>, LR1Conflict<'a, T, N, A>>
-    where FR: FnMut(&Rhs<T, N, A>, Option<&T>) -> bool,
-          FO: FnMut(&Rhs<T, N, A>, Option<&T>) -> i32 {
+    pub fn lalr1<FR, FO>(
+        &self,
+        mut reduce_on: FR,
+        mut priority_of: FO,
+    ) -> Result<LR1ParseTable<'_, T, N, A>, LR1Conflict<'_, T, N, A>>
+    where
+        FR: FnMut(&Rhs<T, N, A>, Option<&T>) -> bool,
+        FO: FnMut(&Rhs<T, N, A>, Option<&T>) -> i32,
+    {
         let state_machine = self.lr0_state_machine();
         let extended = state_machine.extended_grammar();
         let first_sets = extended.first_sets();
         let follow_sets = extended.follow_sets(first_sets);
         let mut r = LR1ParseTable {
-            states: state_machine.states.iter().map(|_| LR1State {
-                eof: None,
-                lookahead: BTreeMap::new(),
-                goto: BTreeMap::new(),
-            }).collect(),
+            states: state_machine
+                .states
+                .iter()
+                .map(|_| LR1State {
+                    eof: None,
+                    lookahead: BTreeMap::new(),
+                    goto: BTreeMap::new(),
+                })
+                .collect(),
         };
 
         // add shifts
-        for (i, &(_, ref trans)) in state_machine.states.iter().enumerate() {
+        for (i, (_, trans)) in state_machine.states.iter().enumerate() {
             for (&sym, &target) in trans.iter() {
                 match *sym {
                     Terminal(ref t) => {
@@ -417,16 +460,17 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         }
 
         // add reductions
-        for ((&(start_state, lhs), rhss),
-             (&&(s2, l2), &(ref follow, eof)))
-            in extended.rules.iter().zip(follow_sets.iter()) {
-
+        for ((&(start_state, lhs), rhss), (&&(s2, l2), &(ref follow, eof))) in
+            extended.rules.iter().zip(follow_sets.iter())
+        {
             debug_assert_eq!(start_state, s2);
             debug_assert!(lhs == l2);
 
-            for &Rhs { syms: _, act: (end_state, rhs) }
-                in rhss.iter() {
-
+            for &Rhs {
+                syms: _,
+                act: (end_state, rhs),
+            } in rhss.iter()
+            {
                 for &&t in follow.iter().filter(|&&&t| reduce_on(rhs, Some(t))) {
                     match r.states[end_state].lookahead.entry(t) {
                         btree_map::Entry::Vacant(v) => {
@@ -434,30 +478,30 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                         }
                         btree_map::Entry::Occupied(mut v) => {
                             match *v.get_mut() {
-                                LRAction::Reduce(l, r) if l == lhs
-                                    && r as *const Rhs<T, N, A>
-                                       == rhs as *const Rhs<T, N, A> => {
+                                LRAction::Reduce(l, r) if l == lhs && std::ptr::eq(r, rhs) => {
                                     // The cells match, so there's no conflict.
                                 }
-                                LRAction::Reduce(ref mut l, ref mut r) => match priority_of(r, Some(t)).cmp(&priority_of(rhs, Some(t))) {
-                                    cmp::Ordering::Greater => {
-                                        // `r` overrides `rhs` - do nothing.
+                                LRAction::Reduce(ref mut l, ref mut r) => {
+                                    match priority_of(r, Some(t)).cmp(&priority_of(rhs, Some(t))) {
+                                        cmp::Ordering::Greater => {
+                                            // `r` overrides `rhs` - do nothing.
+                                        }
+                                        cmp::Ordering::Less => {
+                                            // `rhs` overrides `r`.
+                                            *l = lhs;
+                                            *r = rhs;
+                                        }
+                                        cmp::Ordering::Equal => {
+                                            // Otherwise, we have a reduce/reduce conflict.
+                                            return Err(LR1Conflict::ReduceReduce {
+                                                state: state_machine.states[end_state].0.clone(),
+                                                token: Some(t),
+                                                r1: (*l, *r),
+                                                r2: (lhs, rhs),
+                                            });
+                                        }
                                     }
-                                    cmp::Ordering::Less => {
-                                        // `rhs` overrides `r`.
-                                        *l = lhs;
-                                        *r = rhs;
-                                    }
-                                    cmp::Ordering::Equal => {
-                                        // Otherwise, we have a reduce/reduce conflict.
-                                        return Err(LR1Conflict::ReduceReduce {
-                                            state: state_machine.states[end_state].0.clone(),
-                                            token: Some(t),
-                                            r1: (*l, *r),
-                                            r2: (lhs, rhs),
-                                        });
-                                    }
-                                },
+                                }
                                 LRAction::Shift(_) => {
                                     return Err(LR1Conflict::ShiftReduce {
                                         state: state_machine.states[end_state].0.clone(),
@@ -476,37 +520,36 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                 if eof && reduce_on(rhs, None) {
                     let state = &mut r.states[end_state];
                     if *lhs == self.start {
-                        match state.eof {
-                            Some(_) => unreachable!(),
-                            _ => ()
+                        if state.eof.is_some() {
+                            unreachable!()
                         }
                         state.eof = Some(LRAction::Accept);
                     } else {
                         match state.eof {
-                            Some(LRAction::Reduce(l, r)) if l == lhs
-                                && r as *const Rhs<T, N, A>
-                                   == rhs as *const Rhs<T, N, A> => {
+                            Some(LRAction::Reduce(l, r)) if l == lhs && std::ptr::eq(r, rhs) => {
                                 // no problem
                             }
-                            Some(LRAction::Reduce(ref mut l, ref mut r)) => match priority_of(r, None).cmp(&priority_of(rhs, None)) {
-                                cmp::Ordering::Greater => {
-                                    // `r` overrides `rhs` - do nothing.
+                            Some(LRAction::Reduce(ref mut l, ref mut r)) => {
+                                match priority_of(r, None).cmp(&priority_of(rhs, None)) {
+                                    cmp::Ordering::Greater => {
+                                        // `r` overrides `rhs` - do nothing.
+                                    }
+                                    cmp::Ordering::Less => {
+                                        // `rhs` overrides `r`.
+                                        *l = lhs;
+                                        *r = rhs;
+                                    }
+                                    cmp::Ordering::Equal => {
+                                        // We have a reduce/reduce conflict.
+                                        return Err(LR1Conflict::ReduceReduce {
+                                            state: state_machine.states[end_state].0.clone(),
+                                            token: None,
+                                            r1: (*l, *r),
+                                            r2: (lhs, rhs),
+                                        });
+                                    }
                                 }
-                                cmp::Ordering::Less => {
-                                    // `rhs` overrides `r`.
-                                    *l = lhs;
-                                    *r = rhs;
-                                }
-                                cmp::Ordering::Equal => {
-                                    // We have a reduce/reduce conflict.
-                                    return Err(LR1Conflict::ReduceReduce {
-                                        state: state_machine.states[end_state].0.clone(),
-                                        token: None,
-                                        r1: (*l, *r),
-                                        r2: (lhs, rhs),
-                                    });
-                                }
-                            },
+                            }
                             Some(LRAction::Shift(_)) => {
                                 return Err(LR1Conflict::ShiftReduce {
                                     state: state_machine.states[end_state].0.clone(),
@@ -523,7 +566,6 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                         }
                     }
                 }
-
             }
         }
 
@@ -531,34 +573,45 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
     }
 }
 
+type StateNonterminal<'a, N> = (usize, &'a N);
+type StateRhs<'a, T, N, A> = (usize, &'a Rhs<T, N, A>);
+type StateRule<'a, T, N, A> = Rhs<&'a T, StateNonterminal<'a, N>, StateRhs<'a, T, N, A>>;
+type ExtendedRules<'a, T, N, A> = BTreeMap<StateNonterminal<'a, N>, Vec<StateRule<'a, T, N, A>>>;
+type ExtendedGrammar<'a, T, N, A> = Grammar<&'a T, StateNonterminal<'a, N>, StateRhs<'a, T, N, A>>;
+
 impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
     /// Create an LALR(1) extended grammar, as described
     /// [here](https://web.archive.org/web/20211216015406/https://web.cs.dal.ca/~sjackson/lalr1.html).
-    pub fn extended_grammar(&self) -> Grammar<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)> {
-        let mut r: BTreeMap<(usize, &'a N), Vec<Rhs<&'a T, (usize, &'a N), (usize, &'a Rhs<T, N, A>)>>> = BTreeMap::new();
-        for (ix, &(ref iset, _)) in self.states.iter().enumerate() {
+    pub fn extended_grammar(&self) -> ExtendedGrammar<'a, T, N, A> {
+        let mut r: ExtendedRules<'a, T, N, A> = BTreeMap::new();
+        for (ix, (iset, _)) in self.states.iter().enumerate() {
             for item in iset.items.iter() {
                 if item.pos == 0 {
                     let new_lhs = (ix, item.lhs);
                     let mut state = ix;
                     let new_rhs = Rhs {
-                        syms: item.rhs.syms.iter().map(|sym| {
-                            let old_st = state;
-                            state = *self.states[old_st].1.get(sym).unwrap();
-                            match *sym {
-                                Terminal(ref t) => Terminal(t),
-                                Nonterminal(ref n) => {
-                                    let nt = (old_st, n);
-                                    if let btree_map::Entry::Vacant(view) = r.entry(nt) {
-                                        view.insert(vec![]);
+                        syms: item
+                            .rhs
+                            .syms
+                            .iter()
+                            .map(|sym| {
+                                let old_st = state;
+                                state = *self.states[old_st].1.get(sym).unwrap();
+                                match *sym {
+                                    Terminal(ref t) => Terminal(t),
+                                    Nonterminal(ref n) => {
+                                        let nt = (old_st, n);
+                                        if let btree_map::Entry::Vacant(view) = r.entry(nt) {
+                                            view.insert(vec![]);
+                                        }
+                                        Nonterminal(nt)
                                     }
-                                    Nonterminal(nt)
                                 }
-                            }
-                        }).collect(),
+                            })
+                            .collect(),
                         act: (state, item.rhs),
                     };
-                    r.entry(new_lhs).or_insert(vec![]).push(new_rhs);
+                    r.entry(new_lhs).or_default().push(new_rhs);
                 }
             }
         }
@@ -572,15 +625,17 @@ impl<'a, T: Ord, N: Ord, A> LR0StateMachine<'a, T, N, A> {
 impl<'a, T: Debug, N: Debug, A> LR0StateMachine<'a, T, N, A> {
     /// Print the state machine in graphviz format.
     pub fn print(&self) {
-        println!(r#"
+        println!(
+            r#"
 digraph G {{
     node [
         shape="box",
         style="rounded",
         penwidth=1,
         width=2.0
-    ];"#);
-        for (i, &(ref iset, ref trans)) in self.states.iter().enumerate() {
+    ];"#
+        );
+        for (i, (iset, trans)) in self.states.iter().enumerate() {
             print!("s{}[label=<", i);
             for item in iset.items.iter() {
                 print!("{:?} →", item.lhs);
@@ -591,7 +646,7 @@ digraph G {{
                 for j in item.pos..item.rhs.syms.len() {
                     print!(" {:?}", item.rhs.syms[j]);
                 }
-                print!("<br />\n");
+                println!("<br />");
             }
             println!(">]");
             for (sym, &target) in trans.iter() {
