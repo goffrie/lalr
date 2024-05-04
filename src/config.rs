@@ -9,7 +9,7 @@ use crate::Rhs;
 pub trait Config<T, N, A> {
     /// `resolve_shift_reduse_conflict_in_favor_of_shift` returns true if shift should be resolved
     /// in favor of shift.
-    /// To mimic a behavior of Yacc, this method should return true.
+    /// To mimic a behavior of Bison/Yacc, this method should return true.
     /// See, https://www.gnu.org/savannah-checkouts/gnu/bison/manual/html_node/Shift_002fReduce.html
     /// and https://www.ibm.com/docs/en/zos/2.2.0?topic=ambiguities-rules-help-remove
     /// for more information.
@@ -20,9 +20,23 @@ pub trait Config<T, N, A> {
     /// It also means that the parser will only accept pure LALR(1) grammars.
     ///
     /// If this method returns true, shift-reduce conflict is resolved in favor of shift and the
-    /// parser will accept a wider range of grammars.
+    /// resulting parser will accept a wider range of grammars.
     /// Also, the parse table generation will return warnings for shift-reduce conflicts.
     fn resolve_shift_reduse_conflict_in_favor_of_shift(&self) -> bool {
+        false
+    }
+
+    /// `warn_on_resolved_conflicts` returns true if a warning should be emitted when
+    /// a reduce-reduce or a shift-reduce conflict is resolved.
+    /// A reduce-reduce conflict is resolved by selecting the rule with the highest priority. This
+    /// means that the methode `priority_of` should provide meaningfull values to resolve the
+    /// conflicts in a deterministic way.
+    /// A shift-reduce conflict is resolved by selecting the shift action. This can only be the case
+    /// when 'resolve_shift_reduse_conflict_in_favor_of_shift' returns true.
+    ///
+    /// If this method returns false, no warnings are emitted when a conflict is resolved.
+    /// This is the default behavior of this crate.
+    fn warn_on_resolved_conflicts(&self) -> bool {
         false
     }
 
