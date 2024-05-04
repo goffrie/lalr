@@ -1,14 +1,14 @@
 //! This module provides a trait for the configuration of the parse table generation process.
 //!
-//! The uer can implement this trait to provide a custom configuration.
+//! The user can implement this trait to provide a custom configuration.
 //! The default configuration is provided by the default implementation of this trait.
 //!
 use crate::Rhs;
 
 /// The trait for configuration.
 pub trait Config<T, N, A> {
-    /// Resolve shift-reduce conflict in favor of shift.
-    /// This method returns true if shift should be resolved in favor of shift.
+    /// `resolve_shift_reduse_conflict_in_favor_of_shift` returns true if shift should be resolved
+    /// in favor of shift.
     /// To mimic a behavior of Yacc, this method should return true.
     /// See, https://www.gnu.org/savannah-checkouts/gnu/bison/manual/html_node/Shift_002fReduce.html
     /// and https://www.ibm.com/docs/en/zos/2.2.0?topic=ambiguities-rules-help-remove
@@ -17,7 +17,7 @@ pub trait Config<T, N, A> {
     /// If this method returns false, shift-reduce conflict is not resolved and the parse table
     /// generation will fail with an error.
     /// This is the default behavior of this create.
-    /// It also means that the parser will anly accept LALR(1) grammars.
+    /// It also means that the parser will only accept pure LALR(1) grammars.
     ///
     /// If this method returns true, shift-reduce conflict is resolved in favor of shift and the
     /// parser will accept a wider range of grammars.
@@ -48,6 +48,7 @@ pub trait Config<T, N, A> {
 pub struct DefaultConfig<T, N, A> {
     _phantom: std::marker::PhantomData<(T, N, A)>,
 }
+
 /// The implementation of the default configuration.
 impl<T, N, A> DefaultConfig<T, N, A> {
     /// Create a new default configuration.
@@ -57,10 +58,12 @@ impl<T, N, A> DefaultConfig<T, N, A> {
         }
     }
 }
+
 /// The default implementation of the configuration.
 impl<T, N, A> Default for DefaultConfig<T, N, A> {
     fn default() -> Self {
         DefaultConfig::new()
     }
 }
+
 impl<T, N, A> Config<T, N, A> for DefaultConfig<T, N, A> {}
