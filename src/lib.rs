@@ -206,6 +206,26 @@ pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
     },
 }
 
+/// The applied resolution of an LR(1) conflict.
+#[derive(Debug)]
+pub enum LRConflictResolution {
+    /// Resolved a shift-reduce conflict by shifting.
+    ShiftOverReduce,
+    /// Resolved a reduce-reduce conflict by selecting the first rule.
+    ReduceFirstRule,
+    /// Resolved a reduce-reduce conflict by selecting the second rule.
+    ReduceSecondRule,
+}
+
+/// The resolution of an LR(1) conflict. It is reported to the user during parse table generation.
+#[derive(Debug)]
+pub struct LR1ResolvedConflict<'a, T: 'a, N: 'a, A: 'a> {
+    /// The conflict that was resolved.
+    pub conflict: LR1Conflict<'a, T, N, A>,
+    /// The resolution that was applied.
+    pub applied_resolution: LRConflictResolution,
+}
+
 impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
     /// Create the LR(0) state machine for a grammar.
     pub fn lr0_state_machine<'a>(&'a self) -> LR0StateMachine<'a, T, N, A> {

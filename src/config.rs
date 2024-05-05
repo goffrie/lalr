@@ -3,7 +3,7 @@
 //! The user can implement this trait to provide a custom configuration.
 //! The default configuration is provided by the default implementation of this trait.
 //!
-use crate::Rhs;
+use crate::{LR1ResolvedConflict, Rhs};
 
 /// The trait for configuration.
 pub trait Config<T, N, A> {
@@ -26,18 +26,27 @@ pub trait Config<T, N, A> {
         false
     }
 
-    /// `warn_on_resolved_conflicts` returns true if a warning should be emitted when
-    /// a reduce-reduce or a shift-reduce conflict is resolved.
+    /// `warn_on_resolved_conflicts` returns a reported function if a warnings should be emitted
+    /// when reduce-reduce or a shift-reduce conflicts are resolved.
     /// A reduce-reduce conflict is resolved by selecting the rule with the highest priority. This
     /// means that the methode `priority_of` should provide meaningfull values to resolve the
     /// conflicts in a deterministic way.
     /// A shift-reduce conflict is resolved by selecting the shift action. This can only be the case
-    /// when 'resolve_shift_reduse_conflict_in_favor_of_shift' returns true.
+    /// when `resolve_shift_reduse_conflict_in_favor_of_shift` returns true.
     ///
-    /// If this method returns false, no warnings are emitted when a conflict is resolved.
+    /// Warnings are emmitted by calling the returned function with the resolved conflict.
+    /// This configures the handling of warnings and gives the client full control over the way
+    /// warnings are emitted.
+    ///
+    /// If this method returns `None`, no warnings are emitted when a conflict is resolved.
     /// This is the default behavior of this crate.
-    fn warn_on_resolved_conflicts(&self) -> bool {
-        false
+    fn warn_on_resolved_conflicts<'a>(&self) -> Option<impl Fn(LR1ResolvedConflict<'a, T, N, A>)>
+    where
+        T: 'a,
+        N: 'a,
+        A: 'a,
+    {
+        None::<fn(LR1ResolvedConflict<'a, T, N, A>)>
     }
 
     /// `reduce_on` is a predicate, allowing you to control certain reduce rules based on the
