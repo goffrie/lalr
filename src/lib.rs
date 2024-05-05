@@ -458,6 +458,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
         let extended = state_machine.extended_grammar();
         let first_sets = extended.first_sets();
         let follow_sets = extended.follow_sets(first_sets);
+        let conflict_reporter = config.warn_on_resolved_conflicts();
         let mut r = LR1ParseTable {
             states: state_machine
                 .states
@@ -516,11 +517,39 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                     {
                                         cmp::Ordering::Greater => {
                                             // `r` overrides `rhs` - do nothing.
+                                            if let Some(rep) = conflict_reporter.as_ref() {
+                                                rep(LR1ResolvedConflict {
+                                                    conflict: LR1Conflict::ReduceReduce {
+                                                        state: state_machine.states[end_state]
+                                                            .0
+                                                            .clone(),
+                                                        token: Some(t),
+                                                        r1: (*l, *r),
+                                                        r2: (lhs, rhs),
+                                                    },
+                                                    applied_resolution:
+                                                        LRConflictResolution::ReduceFirstRule,
+                                                })
+                                            }
                                         }
                                         cmp::Ordering::Less => {
                                             // `rhs` overrides `r`.
                                             *l = lhs;
                                             *r = rhs;
+                                            if let Some(rep) = conflict_reporter.as_ref() {
+                                                rep(LR1ResolvedConflict {
+                                                    conflict: LR1Conflict::ReduceReduce {
+                                                        state: state_machine.states[end_state]
+                                                            .0
+                                                            .clone(),
+                                                        token: Some(t),
+                                                        r1: (*l, *r),
+                                                        r2: (lhs, rhs),
+                                                    },
+                                                    applied_resolution:
+                                                        LRConflictResolution::ReduceSecondRule,
+                                                })
+                                            }
                                         }
                                         cmp::Ordering::Equal => {
                                             // Otherwise, we have a reduce/reduce conflict.
@@ -534,11 +563,29 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                     }
                                 }
                                 LRAction::Shift(_) => {
-                                    return Err(LR1Conflict::ShiftReduce {
-                                        state: state_machine.states[end_state].0.clone(),
-                                        token: Some(t),
-                                        rule: (lhs, rhs),
-                                    });
+                                    // shift-reduce conflict
+                                    if config.resolve_shift_reduse_conflict_in_favor_of_shift() {
+                                        // shift wins - do nothing
+                                        if let Some(rep) = conflict_reporter.as_ref() {
+                                            rep(LR1ResolvedConflict {
+                                                conflict: LR1Conflict::ShiftReduce {
+                                                    state: state_machine.states[end_state]
+                                                        .0
+                                                        .clone(),
+                                                    token: Some(t),
+                                                    rule: (lhs, rhs),
+                                                },
+                                                applied_resolution:
+                                                    LRConflictResolution::ShiftOverReduce,
+                                            })
+                                        }
+                                    } else {
+                                        return Err(LR1Conflict::ShiftReduce {
+                                            state: state_machine.states[end_state].0.clone(),
+                                            token: Some(t),
+                                            rule: (lhs, rhs),
+                                        });
+                                    }
                                 }
                                 LRAction::Accept => {
                                     unreachable!();
@@ -567,11 +614,39 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                 {
                                     cmp::Ordering::Greater => {
                                         // `r` overrides `rhs` - do nothing.
+                                        if let Some(rep) = conflict_reporter.as_ref() {
+                                            rep(LR1ResolvedConflict {
+                                                conflict: LR1Conflict::ReduceReduce {
+                                                    state: state_machine.states[end_state]
+                                                        .0
+                                                        .clone(),
+                                                    token: None,
+                                                    r1: (*l, *r),
+                                                    r2: (lhs, rhs),
+                                                },
+                                                applied_resolution:
+                                                    LRConflictResolution::ReduceFirstRule,
+                                            })
+                                        }
                                     }
                                     cmp::Ordering::Less => {
                                         // `rhs` overrides `r`.
                                         *l = lhs;
                                         *r = rhs;
+                                        if let Some(rep) = conflict_reporter.as_ref() {
+                                            rep(LR1ResolvedConflict {
+                                                conflict: LR1Conflict::ReduceReduce {
+                                                    state: state_machine.states[end_state]
+                                                        .0
+                                                        .clone(),
+                                                    token: None,
+                                                    r1: (*l, *r),
+                                                    r2: (lhs, rhs),
+                                                },
+                                                applied_resolution:
+                                                    LRConflictResolution::ReduceSecondRule,
+                                            })
+                                        }
                                     }
                                     cmp::Ordering::Equal => {
                                         // We have a reduce/reduce conflict.
@@ -585,11 +660,27 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                 }
                             }
                             Some(LRAction::Shift(_)) => {
-                                return Err(LR1Conflict::ShiftReduce {
-                                    state: state_machine.states[end_state].0.clone(),
-                                    token: None,
-                                    rule: (lhs, rhs),
-                                });
+                                // shift-reduce conflict
+                                if config.resolve_shift_reduse_conflict_in_favor_of_shift() {
+                                    // shift wins - do nothing
+                                    if let Some(rep) = conflict_reporter.as_ref() {
+                                        rep(LR1ResolvedConflict {
+                                            conflict: LR1Conflict::ShiftReduce {
+                                                state: state_machine.states[end_state].0.clone(),
+                                                token: None,
+                                                rule: (lhs, rhs),
+                                            },
+                                            applied_resolution:
+                                                LRConflictResolution::ShiftOverReduce,
+                                        })
+                                    }
+                                } else {
+                                    return Err(LR1Conflict::ShiftReduce {
+                                        state: state_machine.states[end_state].0.clone(),
+                                        token: None,
+                                        rule: (lhs, rhs),
+                                    });
+                                }
                             }
                             Some(LRAction::Accept) => {
                                 unreachable!();
