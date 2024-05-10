@@ -6,6 +6,12 @@
 //! [`lalr1`](struct.Grammar.html#method.lalr1). Then you can use the
 //! [`LR1ParseTable`](struct.LR1ParseTable.html) to create your own parser.
 
+#![deny(missing_docs)]
+
+pub mod config;
+pub use config::Config;
+use config::ConflictWarner;
+
 use std::cell::RefCell;
 use std::cmp;
 use std::collections::{btree_map, BTreeMap, BTreeSet, VecDeque};
@@ -20,7 +26,9 @@ mod tests;
 /// A symbol in a context-free grammar.
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone)]
 pub enum Symbol<T, N> {
+    /// A terminal symbol.
     Terminal(T),
+    /// A nonterminal symbol.
     Nonterminal(N),
 }
 
@@ -73,6 +81,7 @@ macro_rules! comparators {
 /// The right-hand side of a rule in a context-free grammar.
 #[derive(Debug, Clone)]
 pub struct Rhs<T, N, A> {
+    /// The symbols in the right-hand side of the rule.
     pub syms: Vec<Symbol<T, N>>,
     /// An action associated with this rule.
     /// This can be any data you want to attach to a rule.
@@ -85,8 +94,11 @@ comparators!(Rhs(T, N, A)(T, N)(syms));
 /// An item in an LR(0) state machine, consisting of a rule with a distinguished current position.
 #[derive(Debug)]
 pub struct Item<'a, T: 'a, N: 'a, A: 'a> {
+    /// The left-hand side of the rule.
     pub lhs: &'a N,
+    /// The right-hand side of the rule.
     pub rhs: &'a Rhs<T, N, A>,
+    /// The current position in the rule.
     pub pos: usize,
 }
 comparators!(Item('a, T, N, A) (T, N) (lhs, rhs, pos));
@@ -104,6 +116,7 @@ impl<'a, T, N, A> Clone for Item<'a, T, N, A> {
 /// A set of `Item`s, forming a state in an LR(0) state machine.
 #[derive(Debug)]
 pub struct ItemSet<'a, T: 'a, N: 'a, A: 'a> {
+    /// The items in the set.
     pub items: BTreeSet<Item<'a, T, N, A>>,
 }
 comparators!(ItemSet('a, T, N, A) (T, N) (items));
@@ -141,7 +154,7 @@ pub struct LR0StateMachine<'a, T: 'a, N: 'a, A: 'a> {
 }
 
 /// An action in an LR(1) parse table.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum LRAction<'a, T: 'a, N: 'a, A: 'a> {
     /// Reduce by the given rule.
     Reduce(&'a N, &'a Rhs<T, N, A>),
@@ -152,7 +165,7 @@ pub enum LRAction<'a, T: 'a, N: 'a, A: 'a> {
 }
 
 /// A state in an LR(1) parse table.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LR1State<'a, T: 'a, N: 'a, A: 'a> {
     /// The action if the lookahead is EOF.
     pub eof: Option<LRAction<'a, T, N, A>>,
@@ -163,8 +176,9 @@ pub struct LR1State<'a, T: 'a, N: 'a, A: 'a> {
 }
 
 /// An LR(1) parse table.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct LR1ParseTable<'a, T: 'a, N: 'a, A: 'a> {
+    /// The states of the parse table.
     pub states: Vec<LR1State<'a, T, N, A>>,
 }
 
@@ -191,6 +205,31 @@ pub enum LR1Conflict<'a, T: 'a, N: 'a, A: 'a> {
         /// The reduce rule involved in the conflict.
         rule: (&'a N, &'a Rhs<T, N, A>),
     },
+}
+
+/// The applied resolution of an LR(1) conflict.
+#[derive(Debug)]
+pub enum LRConflictResolution {
+    /// Resolved a shift-reduce conflict by shifting.
+    ShiftOverReduce,
+    /// Resolved a reduce-reduce conflict by selecting the first rule.
+    ReduceFirstRule,
+    /// Resolved a reduce-reduce conflict by selecting the second rule.
+    ReduceSecondRule,
+}
+
+/// The resolution of an LR(1) conflict. It is reported to the user during parse table generation.
+#[derive(Debug)]
+pub struct LR1ResolvedConflict<'a, T: 'a, N: 'a, A: 'a>
+where
+    T: 'a,
+    N: 'a,
+    A: 'a,
+{
+    /// The conflict that was resolved.
+    pub conflict: LR1Conflict<'a, T, N, A>,
+    /// The resolution that was applied.
+    pub applied_resolution: LRConflictResolution,
 }
 
 impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
@@ -406,30 +445,16 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
 
     /// Try to create an LALR(1) parse table out of the grammar.
     ///
-    /// You can tweak the behaviour of the parser in two ways:
-    ///
-    /// - `reduce_on` is a predicate, allowing you to control certain reduce rules based on the
-    ///   lookahead token. This function takes two parameters: the rule, given by its right-hand
-    ///   side, and the lookahead token (or `None` for EOF). You can use this to resolve
-    ///   shift-reduce conflicts. For example, you can solve the "dangling else" problem by
-    ///   forbidding the reduce action on an `else` token.
-    /// - `priority_of` allows you to resolve reduce-reduce conflicts, by giving reduce rules
-    ///   different "priorities". This takes the same parameters as `reduce_on`, so you can vary
-    ///   the priority based on the lookahead token. If there would be a reduce-reduce conflict
-    ///   between rules, but they have different priority, the one with higher priority is used.
-    pub fn lalr1<FR, FO>(
-        &self,
-        mut reduce_on: FR,
-        mut priority_of: FO,
-    ) -> Result<LR1ParseTable<'_, T, N, A>, LR1Conflict<'_, T, N, A>>
-    where
-        FR: FnMut(&Rhs<T, N, A>, Option<&T>) -> bool,
-        FO: FnMut(&Rhs<T, N, A>, Option<&T>) -> i32,
-    {
+    /// You can tweak the behaviour of the parser by implementing the `Config` trait.
+    pub fn lalr1<'a>(
+        &'a self,
+        config: &'a impl Config<'a, T, N, A>,
+    ) -> Result<LR1ParseTable<'_, T, N, A>, LR1Conflict<'_, T, N, A>> {
         let state_machine = self.lr0_state_machine();
         let extended = state_machine.extended_grammar();
         let first_sets = extended.first_sets();
         let follow_sets = extended.follow_sets(first_sets);
+        let conflict_warner = ConflictWarner::new(config);
         let mut r = LR1ParseTable {
             states: state_machine
                 .states
@@ -471,7 +496,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                 act: (end_state, rhs),
             } in rhss.iter()
             {
-                for &&t in follow.iter().filter(|&&&t| reduce_on(rhs, Some(t))) {
+                for &&t in follow.iter().filter(|&&&t| config.reduce_on(rhs, Some(t))) {
                     match r.states[end_state].lookahead.entry(t) {
                         btree_map::Entry::Vacant(v) => {
                             v.insert(LRAction::Reduce(lhs, rhs));
@@ -482,14 +507,31 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                     // The cells match, so there's no conflict.
                                 }
                                 LRAction::Reduce(ref mut l, ref mut r) => {
-                                    match priority_of(r, Some(t)).cmp(&priority_of(rhs, Some(t))) {
+                                    match config
+                                        .priority_of(r, Some(t))
+                                        .cmp(&config.priority_of(rhs, Some(t)))
+                                    {
                                         cmp::Ordering::Greater => {
                                             // `r` overrides `rhs` - do nothing.
+                                            conflict_warner.warn_reduce_reduce(
+                                                &state_machine.states[end_state].0,
+                                                Some(t),
+                                                (*l, *r),
+                                                (lhs, rhs),
+                                                LRConflictResolution::ReduceFirstRule,
+                                            );
                                         }
                                         cmp::Ordering::Less => {
                                             // `rhs` overrides `r`.
                                             *l = lhs;
                                             *r = rhs;
+                                            conflict_warner.warn_reduce_reduce(
+                                                &state_machine.states[end_state].0,
+                                                Some(t),
+                                                (*l, *r),
+                                                (lhs, rhs),
+                                                LRConflictResolution::ReduceSecondRule,
+                                            );
                                         }
                                         cmp::Ordering::Equal => {
                                             // Otherwise, we have a reduce/reduce conflict.
@@ -503,11 +545,21 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                     }
                                 }
                                 LRAction::Shift(_) => {
-                                    return Err(LR1Conflict::ShiftReduce {
-                                        state: state_machine.states[end_state].0.clone(),
-                                        token: Some(t),
-                                        rule: (lhs, rhs),
-                                    });
+                                    // shift-reduce conflict
+                                    if config.resolve_shift_reduce_conflict_in_favor_of_shift() {
+                                        // shift wins - do nothing
+                                        conflict_warner.warn_shift_reduce(
+                                            &state_machine.states[end_state].0,
+                                            Some(t),
+                                            (lhs, rhs),
+                                        );
+                                    } else {
+                                        return Err(LR1Conflict::ShiftReduce {
+                                            state: state_machine.states[end_state].0.clone(),
+                                            token: Some(t),
+                                            rule: (lhs, rhs),
+                                        });
+                                    }
                                 }
                                 LRAction::Accept => {
                                     unreachable!();
@@ -517,7 +569,7 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                     }
                 }
 
-                if eof && reduce_on(rhs, None) {
+                if eof && config.reduce_on(rhs, None) {
                     let state = &mut r.states[end_state];
                     if *lhs == self.start {
                         if state.eof.is_some() {
@@ -530,14 +582,31 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                 // no problem
                             }
                             Some(LRAction::Reduce(ref mut l, ref mut r)) => {
-                                match priority_of(r, None).cmp(&priority_of(rhs, None)) {
+                                match config
+                                    .priority_of(r, None)
+                                    .cmp(&config.priority_of(rhs, None))
+                                {
                                     cmp::Ordering::Greater => {
                                         // `r` overrides `rhs` - do nothing.
+                                        conflict_warner.warn_reduce_reduce(
+                                            &state_machine.states[end_state].0,
+                                            None,
+                                            (*l, *r),
+                                            (lhs, rhs),
+                                            LRConflictResolution::ReduceFirstRule,
+                                        );
                                     }
                                     cmp::Ordering::Less => {
                                         // `rhs` overrides `r`.
                                         *l = lhs;
                                         *r = rhs;
+                                        conflict_warner.warn_reduce_reduce(
+                                            &state_machine.states[end_state].0,
+                                            None,
+                                            (*l, *r),
+                                            (lhs, rhs),
+                                            LRConflictResolution::ReduceSecondRule,
+                                        );
                                     }
                                     cmp::Ordering::Equal => {
                                         // We have a reduce/reduce conflict.
@@ -551,11 +620,21 @@ impl<T: Ord, N: Ord, A> Grammar<T, N, A> {
                                 }
                             }
                             Some(LRAction::Shift(_)) => {
-                                return Err(LR1Conflict::ShiftReduce {
-                                    state: state_machine.states[end_state].0.clone(),
-                                    token: None,
-                                    rule: (lhs, rhs),
-                                });
+                                // shift-reduce conflict
+                                if config.resolve_shift_reduce_conflict_in_favor_of_shift() {
+                                    // shift wins - do nothing
+                                    conflict_warner.warn_shift_reduce(
+                                        &state_machine.states[end_state].0,
+                                        None,
+                                        (lhs, rhs),
+                                    );
+                                } else {
+                                    return Err(LR1Conflict::ShiftReduce {
+                                        state: state_machine.states[end_state].0.clone(),
+                                        token: None,
+                                        rule: (lhs, rhs),
+                                    });
+                                }
                             }
                             Some(LRAction::Accept) => {
                                 unreachable!();
