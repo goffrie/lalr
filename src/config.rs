@@ -114,7 +114,7 @@ impl<'a, T, N, A> ConflictWarner<'a, T, N, A> {
         ConflictWarner { config }
     }
 
-    /// Issue a warning for a resolved reduce-reduce conflict.
+    /// Issue a warning for a resolved shift-reduce conflict.
     /// The lifetime 'b is used to ensure that the state is not borrowed for longer than necessary.
     pub fn warn_shift_reduce<'b>(
         &self,
